@@ -480,6 +480,8 @@ function viewSheet(){
       <input class="text" id="k2" value="${esc(LS.get(KEY)||'')}" placeholder="API 키">
       <input class="text" id="m2" style="margin-top:8px" value="${esc(LS.get(MODEL)||'gemini-2.5-flash')}" placeholder="모델명">
       <button class="b-sm" style="margin-top:8px" data-a="savekey2">저장</button>
+      <button class="b-sm" style="margin-top:8px;margin-left:6px" data-a="test">연결 테스트</button>
+      ${S.test?`<div class="err">${esc(S.test)}</div>`:''}
       <button class="b-ghost b-wide" data-a="close">닫기</button></div></div>`;
   }
   if(s.kind==='mix'){
@@ -611,7 +613,14 @@ document.addEventListener('click',async e=>{
     case 'savekey2':{LS.set(KEY,document.getElementById('k2').value.trim());
       LS.set(MODEL,document.getElementById('m2').value.trim()||'gemini-2.5-flash');
       S.sheet=null;render();break}
-    case 'settings':S.sheet={kind:'settings'};render();break;
+    case 'settings':S.sheet={kind:'settings'};S.test='';render();break;
+    case 'test':{
+      LS.set(KEY,document.getElementById('k2').value.trim());
+      LS.set(MODEL,document.getElementById('m2').value.trim()||'gemini-2.5-flash');
+      S.test='테스트 중...';render();
+      try{const t=await ask([{text:'JSON 배열로만 답하세요: ["ok"]'}]);S.test='성공 ✓ '+t.slice(0,120)}
+      catch(err){S.test='실패 ✕ '+err.message}
+      render();break}
     case 'savename':{setJ(PROF,{name:document.getElementById('nm').value.trim()});S.sheet=null;render();break}
     case 'export':exportAll();break;
     case 'import':document.getElementById('imp').click();break;
