@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="添削ノート">
+<meta name="theme-color" content="#F7F4EA">
+<title>添削ノート</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--paper:#F7F4EA;--ink:#20272E;--red:#C8322B;--grid:#8AA592;--faint:#E4DECB}
+body{background:var(--paper);color:var(--ink);
+  font-family:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+.mincho{font-family:"Hiragino Mincho ProN","Yu Mincho",YuMincho,"Noto Serif JP","Nanum Myeongjo",serif}
+.wrap{max-width:560px;margin:0 auto;padding:calc(22px + env(safe-area-inset-top)) 20px 80px}
+ruby rt{font-size:.46em;color:#7a7360;font-weight:400}
+.hide{display:none !important}
+
+.head{display:flex;align-items:flex-end;justify-content:space-between;
+  border-bottom:1.5px solid var(--ink);padding-bottom:10px;margin-bottom:24px}
+.brand{font-size:23px;letter-spacing:.14em;line-height:1}
+.brand em{font-style:normal;color:var(--red)}
+.who{font-size:11px;letter-spacing:.1em;color:#7d7663;background:none;border:none;
+  cursor:pointer;font-family:inherit;padding-bottom:2px}
+
+.genko{border:1.5px solid var(--grid);background:
+  linear-gradient(to right,rgba(138,165,146,.45) 1px,transparent 1px) 0 0/25% 100%,
+  linear-gradient(to bottom,rgba(138,165,146,.45) 1px,transparent 1px) 0 0/100% 33.33%,#FBF9F2;
+  padding:30px 20px;text-align:center}
+.genko-title{font-size:19px;letter-spacing:.06em;margin-bottom:6px}
+.genko-desc{font-size:12.5px;color:#6f6959;line-height:1.7;margin-bottom:18px}
+.btnrow{display:flex;gap:9px;justify-content:center;flex-wrap:wrap}
+
+button{font:inherit;cursor:pointer;border-radius:2px}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.4}
+.b-red{background:var(--red);color:#fff;border:none;padding:12px 20px;font-size:14.5px}
+.b-line{background:transparent;color:var(--ink);border:1.2px solid var(--ink);padding:12px 18px;font-size:14.5px}
+.b-sm{border:1px solid var(--faint);background:#FBF9F2;padding:8px 12px;font-size:12.5px;color:#5f5949}
+.b-ghost{background:none;border:none;color:#6f6959;font-size:13px;text-decoration:underline;
+  text-underline-offset:3px;padding:9px}
+.b-wide{display:block;width:100%;text-align:center;margin-top:12px}
+
+.count{display:flex;align-items:center;justify-content:center;gap:14px;margin:4px 0 14px}
+.count-n{font-size:40px;line-height:1;min-width:92px}
+.count-n span{font-size:13px;letter-spacing:.1em;color:#7d7663;margin-left:3px}
+.step{width:38px;height:38px;border:1.2px solid var(--ink);background:transparent;font-size:19px}
+.rng{width:100%;accent-color:#C8322B;margin-bottom:16px}
+
+.shots{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;margin-bottom:16px}
+.shot{position:relative;width:54px;height:54px;border:1px solid var(--faint)}
+.shot img{width:100%;height:100%;object-fit:cover;display:block}
+.shot button{position:absolute;top:-7px;right:-7px;width:20px;height:20px;border-radius:50%;
+  background:var(--ink);color:#fff;border:none;font-size:12px;line-height:1}
+
+.sec{font-size:11px;letter-spacing:.2em;color:#8d8674;margin:30px 0 10px;display:flex;align-items:center;gap:10px}
+.sec:after{content:"";flex:1;height:1px;background:var(--faint)}
+.rec{display:flex;align-items:center;gap:12px;width:100%;background:transparent;border:none;
+  border-bottom:1px solid var(--faint);padding:11px 2px;text-align:left}
+.rec .box{width:22px;height:22px;border:1px solid var(--grid);flex:none;display:grid;
+  place-items:center;font-size:12px;color:var(--red)}
+.rec img{width:42px;height:42px;object-fit:cover;border:1px solid var(--faint);flex:none}
+.rec-t{flex:1;min-width:0}
+.rec-t b{display:block;font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rec-t span{font-size:11.5px;color:#8d8674}
+.rec-s{font-size:13px;color:var(--red);flex:none}
+.empty{font-size:13px;color:#8d8674;line-height:1.8;padding:4px 2px}
+
+.veil{position:fixed;inset:0;background:rgba(32,39,46,.45);display:flex;align-items:flex-end;
+  justify-content:center;z-index:20}
+.sheet{background:var(--paper);width:100%;max-width:560px;padding:22px 20px calc(30px + env(safe-area-inset-bottom));
+  border-top:3px solid var(--red);max-height:86vh;overflow:auto;animation:up .24s cubic-bezier(.2,.9,.3,1)}
+@keyframes up{from{transform:translateY(26px)}}
+.sheet h3{font-size:17px;margin-bottom:4px}
+.sheet .meta{font-size:12px;color:#8d8674;margin-bottom:16px}
+input.text{width:100%;font:inherit;font-size:15px;padding:11px 12px;background:#FBF9F2;
+  border:1px solid var(--faint);border-radius:0}
+input.text:focus{outline:none;border-color:var(--ink)}
+.log{font-size:12.5px;color:#5f5949;padding:6px 0;border-bottom:1px dotted var(--faint);
+  display:flex;justify-content:space-between}
+
+.load{text-align:center;padding:70px 0}
+.brush{width:2px;height:60px;background:var(--ink);margin:0 auto 24px;transform-origin:top;
+  animation:stroke 1.5s ease-in-out infinite}
+@keyframes stroke{0%{transform:scaleY(0);opacity:0}40%,70%{transform:scaleY(1);opacity:1}100%{transform:scaleY(1);opacity:0}}
+.load p{font-size:14px;color:#6f6959}
+.load .n{font-size:12px;color:#8d8674;margin-top:8px;letter-spacing:.1em}
+
+.track{display:flex;gap:3px;flex-wrap:wrap;margin-bottom:20px}
+.cell{width:16px;height:16px;border:1px solid var(--grid);background:#FBF9F2;position:relative}
+.cell.now{border-color:var(--ink);border-width:1.5px}
+.cell svg{position:absolute;inset:0;width:100%;height:100%}
+
+.qno{font-size:12px;letter-spacing:.28em;color:var(--red);margin-bottom:9px;display:flex;justify-content:space-between}
+.qno i{font-style:normal;color:#8d8674;letter-spacing:.1em}
+.qtext{font-size:17px;line-height:1.65;word-break:keep-all}
+.jp{font-size:26px;line-height:1.9;margin:16px 0 22px;border-left:3px solid var(--red);padding-left:14px}
+.choice{position:relative;display:flex;align-items:flex-start;gap:12px;width:100%;background:#FBF9F2;
+  border:1px solid var(--faint);padding:14px 15px;text-align:left;margin-bottom:9px;font-size:16px;line-height:1.7}
+.choice .mk{flex:none;width:22px;height:22px;border:1px solid var(--grid);display:grid;
+  place-items:center;font-size:12px;color:#8d8674;margin-top:3px}
+.choice.on{border-color:var(--ink)}
+svg.pen{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.pen path,.cell path{stroke:var(--red);fill:none;stroke-linecap:round;
+  stroke-dasharray:1200;stroke-dashoffset:1200;animation:draw .5s ease-out forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+
+input.short{width:100%;font:inherit;font-size:22px;padding:12px 14px;background:#FBF9F2;border:none;
+  border-bottom:2px solid var(--ink);border-radius:0;text-align:center}
+input.short:focus{outline:none;border-color:var(--red)}
+
+.match{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.tile{position:relative;background:#FBF9F2;border:1px solid var(--faint);padding:14px 8px;
+  font-size:19px;text-align:center;line-height:1.4;margin-bottom:9px;width:100%}
+.tile.sel{border-color:var(--ink);border-width:1.5px;background:#F2EEE0}
+.tile.done{opacity:.55}
+.tile.bad{animation:shake .3s}
+@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.hint{font-size:12px;color:#8d8674;text-align:center;margin:6px 0 14px}
+
+.fb{border-top:1px solid var(--faint);margin-top:18px;padding-top:14px}
+.fb-h{font-size:15px;font-weight:700;margin-bottom:5px}
+.fb-h.o{color:var(--red)}
+.fb p{font-size:13.5px;line-height:1.7;color:#5f5949}
+
+.stamp-area{text-align:center;padding:26px 0 4px}
+.stamp{display:inline-block;animation:press .5s cubic-bezier(.2,1.5,.4,1) both}
+@keyframes press{0%{transform:scale(1.7) rotate(-14deg);opacity:0}
+  60%{transform:scale(.97) rotate(-7deg);opacity:1}100%{transform:scale(1) rotate(-7deg);opacity:1}}
+.score{font-size:15px;color:#6f6959;margin-top:14px}
+.score b{font-size:34px;color:var(--ink)}
+.rv{border-bottom:1px solid var(--faint);padding:12px 2px;display:flex;gap:11px;align-items:flex-start}
+.rv-m{font-size:15px;color:var(--red);flex:none;width:18px;text-align:center;line-height:1.6}
+.rv-b{flex:1;min-width:0}
+.rv-q{font-size:14px;line-height:1.7}
+.rv-a{font-size:12.5px;color:#5f5949;line-height:1.6}
+.rv-a i{font-style:normal;color:var(--red);font-weight:600}
+
+.err{background:#FBF0EE;border-left:3px solid var(--red);padding:13px 15px;font-size:13.5px;
+  line-height:1.7;margin-top:16px;word-break:break-word}
+.note{font-size:11.5px;color:#8d8674;line-height:1.7;margin-top:20px;text-align:center}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms !important}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<input type="file" id="cam" accept="image/*" capture="environment" multiple class="hide">
+<input type="file" id="pick" accept="image/*" multiple class="hide">
+<input type="file" id="imp" accept="application/json,.json" class="hide">
+
+<script>
+/* ═══ 저장소 ═══ */
+const mem={};
+const LS={
+  get:k=>{try{return localStorage.getItem(k)}catch(e){return k in mem?mem[k]:null}},
+  set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){mem[k]=v}},
+  del:k=>{try{localStorage.removeItem(k)}catch(e){delete mem[k]}},
+  keys:()=>{try{return Object.keys(localStorage)}catch(e){return Object.keys(mem)}}
+};
+const getJ=(k,d)=>{try{return JSON.parse(LS.get(k))??d}catch(e){return d}};
+const setJ=(k,v)=>LS.set(k,JSON.stringify(v));
+
+const KEY='jq:key', MODEL='jq:model', PROF='jq:profile', IDX='jq:index';
+let S={view:'home',shots:[],want:20,err:'',prog:null,set:null,qi:0,ans:[],typed:'',
+       locked:false,pair:null,sheet:null,picked:[]};
+
+/* ═══ 유틸 ═══ */
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const RUBY=/([\u4e00-\u9fff々ヶ]+)[（(]([ぁ-んァ-ヶー]+)[)）]/g;
+const plain=t=>String(t||'').replace(RUBY,'$1');
+function ruby(t,strip){
+  if(!t)return'';
+  return esc(String(t)).replace(RUBY,(m,k,r)=>strip?k:`<ruby>${k}<rt>${r}</rt></ruby>`);
+}
+const norm=s=>String(s||'').trim().toLowerCase().replace(/[\s・、。,.]/g,'')
+  .replace(/[\u30a1-\u30f6]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
+const today=()=>{const d=new Date(),p=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}.${p(d.getMonth()+1)}.${p(d.getDate())}`};
+const shuffle=a=>{const r=[...a];for(let i=r.length-1;i>0;i--){const j=Math.random()*(i+1)|0;
+  [r[i],r[j]]=[r[j],r[i]]}return r};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+function shrink(file,max,q){return new Promise((res,rej)=>{
+  const img=new Image(),fr=new FileReader();
+  fr.onerror=()=>rej(Error('read'));
+  fr.onload=()=>{img.onerror=()=>rej(Error('decode'));
+    img.onload=()=>{const s=Math.min(1,max/Math.max(img.width,img.height));
+      const c=document.createElement('canvas');
+      c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      res(c.toDataURL('image/jpeg',q))};
+    img.src=fr.result};
+  fr.readAsDataURL(file)})}
+
+/* ═══ Gemini 호출 ═══ */
+async function ask(parts){
+  const key=LS.get(KEY), model=LS.get(MODEL)||'gemini-2.5-flash';
+  const url=`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+  const body={contents:[{role:'user',parts}],
+    generationConfig:{temperature:.8,maxOutputTokens:4000,responseMimeType:'application/json'}};
+  for(let t=0;t<4;t++){
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.status===429||r.status===503){await sleep(2000*(t+1));continue}
+    const d=await r.json();
+    if(d.error)throw Error(d.error.message||'API 오류');
+    const c=d.candidates&&d.candidates[0];
+    if(!c||!c.content)throw Error('빈 응답');
+    return c.content.parts.map(p=>p.text||'').join('');
+  }
+  throw Error('요청이 많아 잠시 막혔습니다. 1분 뒤 다시 해주세요.');
+}
+function loose(t){
+  const s=String(t).replace(/```json|```/g,'').trim();
+  try{return JSON.parse(s)}catch(e){
+    const a=s.indexOf('['),c=s.lastIndexOf('}');
+    if(a<0||c<a)throw e;
+    return JSON.parse(s.slice(a,c+1)+']');
+  }
+}
+async function pool(tasks,limit,tick){
+  const out=[];let i=0;
+  await Promise.all(Array.from({length:Math.min(limit,tasks.length)},async()=>{
+    while(i<tasks.length){const k=i++;
+      try{out[k]=await tasks[k]()}catch(e){out[k]=null;console.warn(e)}
+      tick&&tick()}
+  }));
+  return out;
+}
+
+const EXTRACT=`이 사진은 일본어 학습 교재의 한 페이지입니다. 학습자가 외워야 할 항목을 뽑아 주세요.
+- 사진에 실제로 보이는 단어·한자·문형·예문만. 없는 내용은 절대 만들지 않는다.
+- 최대 15개.
+- jp: 일본어 표기(한자 그대로). yomi: 히라가나 읽기. ko: 한국어 뜻. ex: 사진 속 예문(없으면 "").
+JSON 배열만 출력: [{"jp":"勉強","yomi":"べんきょう","ko":"공부","ex":"毎日勉強します"}]
+일본어 교재가 아니면 [] 만 출력.`;
+
+const genPrompt=(items,n,avoid)=>`아래는 학습자가 공부한 일본어 항목입니다.
+${JSON.stringify(items)}
+
+이 항목만 사용해 시험 문제 ${n}개를 만드세요. JSON 배열만 출력.
+형식(4종을 골고루 섞을 것):
+{"type":"choice","q":"한국어 질문","jp":"日本語(にほんご)","choices":["","","",""],"answer":0,"explain":""}
+{"type":"short","q":"밑줄 친 단어의 읽는 법을 쓰세요","jp":"勉強","answers":["べんきょう"],"explain":""}
+{"type":"write","q":"'공부하다'를 일본어로 쓰세요","jp":"","answers":["勉強する","べんきょうする"],"explain":""}
+{"type":"match","q":"한자와 읽는 법을 연결하세요","pairs":[{"k":"勉強","r":"べんきょう"}],"explain":""}
+규칙:
+- 모든 한자에 (읽는법) 후리가나를 괄호로 붙인다. 예: 毎日(まいにち)勉強(べんきょう)します
+- 단, "short" 문제의 jp에는 후리가나를 절대 붙이지 않는다(정답 노출 금지).
+- match는 pairs 정확히 4쌍. pairs의 k에는 후리가나를 붙이지 않는다.
+- write의 answers에는 한자·히라가나 표기를 모두 넣는다.
+- q는 한국어. explain은 20자 이내 한국어.
+${avoid.length?'- 이미 출제된 단어는 피할 것: '+avoid.slice(0,40).join(','):''}`;
+
+/* ═══ 생성 ═══ */
+async function build(o){
+  const need=S.want, per=10, batches=Math.ceil(need/per);
+  S.prog={label:'문제를 만드는 중',done:0,total:batches};render();
+  const avoid=o.base?o.base.questions.map(q=>plain(q.jp||(q.pairs?q.pairs[0].k:''))).filter(Boolean):[];
+  const tasks=[];
+  for(let b=0;b<batches;b++){
+    const n=Math.min(per,need-b*per);
+    tasks.push(async()=>loose(await ask([{text:genPrompt(shuffle(o.items).slice(0,14),n,avoid)}])));
+  }
+  const got=await pool(tasks,2,()=>{S.prog.done++;render()});
+  const qs=[];
+  for(const arr of got){
+    if(!Array.isArray(arr))continue;
+    for(const q of arr){
+      if(!q||!q.q)continue;
+      if(q.type==='match'&&(!q.pairs||q.pairs.length<2))continue;
+      if(q.type==='choice'&&(!q.choices||q.choices.length<2))continue;
+      if((q.type==='short'||q.type==='write')&&!q.answers)continue;
+      qs.push(q);
+    }
+  }
+  if(!qs.length)throw Error('문제를 만들지 못했습니다');
+  const base=o.base;
+  const set={id:base?base.id:'s'+Date.now(), title:base?base.title:o.title,
+    date:base?base.date:today(), thumb:base?base.thumb:o.thumb,
+    items:o.items, questions:qs.slice(0,need), attempts:base?base.attempts||[]:[]};
+  setJ('jq:set:'+set.id,set);
+  const idx=getJ(IDX,[]);
+  if(base) setJ(IDX,idx.map(r=>r.id===set.id?{...r,total:set.questions.length}:r));
+  else setJ(IDX,[{id:set.id,title:set.title,date:set.date,thumb:set.thumb,
+    total:set.questions.length,best:null,words:o.items.length},...idx]);
+  S.prog=null;begin(set);
+}
+
+async function fromPhotos(){
+  S.err='';if(!S.shots.length)return;
+  S.prog={label:'사진에서 단어를 뽑는 중',done:0,total:S.shots.length};render();
+  try{
+    const tasks=S.shots.map(s=>async()=>loose(await ask([
+      {inline_data:{mime_type:'image/jpeg',data:s.full.split(',')[1]}},{text:EXTRACT}])));
+    const packs=await pool(tasks,2,()=>{S.prog.done++;render()});
+    const items=[],seen=new Set();
+    for(const arr of packs)if(Array.isArray(arr))for(const it of arr){
+      if(!it||!it.jp||seen.has(it.jp))continue;seen.add(it.jp);items.push(it)}
+    if(!items.length){S.prog=null;S.err='사진에서 일본어를 찾지 못했습니다. 글씨가 선명하게 나오도록 다시 찍어 주세요.';return render()}
+    const n=S.shots.length;S.shots=[];
+    await build({items,thumb:S.shots[0]?S.shots[0].thumb:packs.thumb,title:`${today()} 교재 ${n}장`});
+  }catch(e){S.prog=null;S.err=e.message;render()}
+}
+
+async function fromHistory(){
+  S.err='';if(!S.picked.length)return;
+  const idx=getJ(IDX,[]);
+  S.sheet=null;S.prog={label:'공부 기록을 모으는 중',done:0,total:S.picked.length};render();
+  try{
+    const items=[],seen=new Set();let thumb=null;
+    for(const id of S.picked){
+      const s=getJ('jq:set:'+id,null);if(!s)continue;
+      if(!thumb)thumb=s.thumb;
+      for(const it of s.items||[]){if(it&&it.jp&&!seen.has(it.jp)){seen.add(it.jp);items.push(it)}}
+      S.prog.done++;render();
+    }
+    if(!items.length)throw Error('단어가 없습니다');
+    const n=S.picked.length;S.picked=[];
+    await build({items,thumb,title:`모아 보기 · ${n}회분`});
+  }catch(e){S.prog=null;S.err=e.message;render()}
+}
+
+async function regen(set){
+  S.sheet=null;S.err='';
+  try{await build({items:set.items,base:set})}
+  catch(e){S.prog=null;S.err=e.message;render()}
+}
+
+/* ═══ 진행 ═══ */
+function begin(set){Object.assign(S,{set,qi:0,ans:[],typed:'',locked:false,pair:null,view:'quiz'});render()}
+function mark(ok,given){S.ans.push({ok,given});S.locked=true;render()}
+function submit(pick){
+  const q=S.set.questions[S.qi];
+  if(q.type==='short'||q.type==='write')
+    mark((q.answers||[]).map(norm).includes(norm(S.typed)),S.typed);
+  else mark(pick===q.answer,pick);
+}
+function next(){
+  if(S.qi+1<S.set.questions.length){S.qi++;S.typed='';S.locked=false;S.pair=null;return render()}
+  const score=S.ans.filter(a=>a.ok).length, total=S.set.questions.length;
+  S.set.attempts=[{date:today(),score,total},...(S.set.attempts||[])].slice(0,30);
+  setJ('jq:set:'+S.set.id,S.set);
+  setJ(IDX,getJ(IDX,[]).map(r=>r.id===S.set.id?
+    {...r,best:r.best==null?score:Math.max(r.best,score)}:r));
+  S.view='result';render();
+}
+
+/* ═══ 백업 ═══ */
+function exportAll(){
+  const data={v:1,at:new Date().toISOString(),items:{}};
+  for(const k of LS.keys())if(k.startsWith('jq:')&&k!==KEY)data.items[k]=LS.get(k);
+  const b=new Blob([JSON.stringify(data)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);a.download=`tensaku-backup-${today()}.json`;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+}
+function importAll(file){
+  const fr=new FileReader();
+  fr.onload=()=>{try{
+    const d=JSON.parse(fr.result);
+    if(!d.items)throw Error('형식이 다릅니다');
+    for(const k in d.items)if(k.startsWith('jq:')&&k!==KEY)LS.set(k,d.items[k]);
+    S.sheet=null;S.err='';render();
+  }catch(e){S.err='불러오지 못했습니다: '+e.message;render()}};
+  fr.readAsText(file);
+}
+
+/* ═══ 화면 ═══ */
+const MARU='<svg class="pen" viewBox="0 0 320 62" preserveAspectRatio="none"><path d="M160 5 C 60 5 8 18 8 31 C 8 45 62 57 160 57 C 258 57 312 45 312 31 C 312 18 262 5 158 5" stroke-width="2.2"/></svg>';
+const SLASH='<svg class="pen" viewBox="0 0 320 62" preserveAspectRatio="none"><path d="M20 52 L300 10" stroke-width="2.2"/></svg>';
+const ABC=['ア','イ','ウ','エ'];
+const TYPE={choice:'고르기',short:'읽는 법',write:'직접 쓰기',match:'연결하기'};
+
+function head(){
+  const p=getJ(PROF,null);
+  return `<div class="head"><div class="brand mincho">添削<em>ノート</em></div>
+    <button class="who" data-a="settings">${p&&p.name?esc(p.name)+' 님 · 설정':'설정'}</button></div>`;
+}
+
+function render(){
+  const app=document.getElementById('app');
+  if(!LS.get(KEY))return app.innerHTML=viewKey();
+  if(S.prog)return app.innerHTML=head()+`<div class="load"><div class="brush"></div>
+    <p>${esc(S.prog.label)}</p><div class="n">${S.prog.done} / ${S.prog.total}</div></div>`;
+  if(S.view==='quiz')app.innerHTML=viewQuiz();
+  else if(S.view==='result')app.innerHTML=viewResult();
+  else app.innerHTML=viewHome();
+  if(S.sheet)app.insertAdjacentHTML('beforeend',viewSheet());
+  const inp=document.querySelector('input.short');
+  if(inp&&!S.locked)inp.focus({preventScroll:true});
+}
+
+function viewKey(){
+  return `<div class="head"><div class="brand mincho">添削<em>ノート</em></div></div>
+  <div class="genko"><div class="genko-title mincho">はじめに</div>
+  <p class="genko-desc">Google AI Studio에서 받은 API 키를 넣어 주세요.<br>이 기기에만 저장되고 어디로도 전송되지 않습니다.</p>
+  <input class="text" id="k" placeholder="AIza..." autocomplete="off">
+  <button class="b-red b-wide" data-a="savekey">시작하기</button></div>
+  <p class="note">aistudio.google.com → Get API key<br>카드 등록 없이 무료로 발급됩니다.</p>
+  ${S.err?`<div class="err">${esc(S.err)}</div>`:''}`;
+}
+
+function viewHome(){
+  const idx=getJ(IDX,[]);
+  return head()+`
+  <div class="genko">
+    <div class="genko-title mincho">今日のページ</div>
+    <p class="genko-desc">교재 페이지를 여러 장 찍어 올리면 그 내용으로 시험을 만듭니다.</p>
+    ${S.shots.length?`<div class="shots">${S.shots.map((s,i)=>
+      `<div class="shot"><img src="${s.thumb}"><button data-a="unshot" data-i="${i}">×</button></div>`).join('')}</div>`:''}
+    <div class="count">
+      <button class="step" data-a="minus">−</button>
+      <div class="count-n mincho">${S.want}<span>문제</span></div>
+      <button class="step" data-a="plus">＋</button>
+    </div>
+    <input class="rng" type="range" min="10" max="100" step="10" value="${S.want}" data-a="rng">
+    <div class="btnrow">
+      <button class="b-line" data-a="cam">사진 찍기</button>
+      <button class="b-line" data-a="pick">앨범에서 고르기</button>
+    </div>
+    ${S.shots.length?`<button class="b-red b-wide" data-a="make">사진 ${S.shots.length}장으로 ${S.want}문제 만들기</button>`:''}
+  </div>
+  ${S.err?`<div class="err">${esc(S.err)}</div>`:''}
+  <div class="sec">공부 이력</div>
+  ${idx.length?idx.map(r=>`<button class="rec" data-a="open" data-id="${r.id}">
+      ${r.thumb?`<img src="${r.thumb}">`:'<div class="box mincho">集</div>'}
+      <div class="rec-t"><b>${esc(r.title)}</b><span>${r.date} · ${r.total}문제${r.words?' · 단어 '+r.words:''}</span></div>
+      <div class="rec-s mincho">${r.best==null?'미응시':r.best+'/'+r.total}</div></button>`).join('')
+    +`<button class="b-line b-wide" data-a="mix">이력에서 골라 모아 시험 보기</button>`
+    :'<p class="empty">아직 기록이 없습니다.<br>첫 페이지를 올리면 여기에 쌓입니다.</p>'}
+  <p class="note">기록은 이 브라우저에만 저장됩니다.<br>설정에서 가끔 백업해 두세요.</p>`;
+}
+
+function viewSheet(){
+  const s=S.sheet;
+  if(s.kind==='settings'){
+    const p=getJ(PROF,{});
+    return `<div class="veil" data-a="veil"><div class="sheet">
+      <h3>설정</h3><p class="meta">이 기기에만 저장됩니다.</p>
+      <input class="text" id="nm" value="${esc(p.name||'')}" placeholder="이름">
+      <button class="b-sm" style="margin-top:8px" data-a="savename">이름 저장</button>
+      <div class="sec">백업</div>
+      <p class="empty">브라우저 데이터를 지우면 기록이 사라집니다. 가끔 파일로 내보내 두세요.</p>
+      <button class="b-line b-wide" data-a="export">기록 내보내기</button>
+      <button class="b-line b-wide" data-a="import">기록 불러오기</button>
+      <div class="sec">API</div>
+      <input class="text" id="k2" value="${esc(LS.get(KEY)||'')}" placeholder="API 키">
+      <input class="text" id="m2" style="margin-top:8px" value="${esc(LS.get(MODEL)||'gemini-2.5-flash')}" placeholder="모델명">
+      <button class="b-sm" style="margin-top:8px" data-a="savekey2">저장</button>
+      <button class="b-ghost b-wide" data-a="close">닫기</button></div></div>`;
+  }
+  if(s.kind==='mix'){
+    const idx=getJ(IDX,[]);
+    return `<div class="veil" data-a="veil"><div class="sheet">
+      <h3>모아서 시험 보기</h3><p class="meta">고른 기록의 단어를 섞어 새 문제를 만듭니다.</p>
+      ${idx.map(r=>`<button class="rec" data-a="tick" data-id="${r.id}">
+        <div class="box mincho">${S.picked.includes(r.id)?'○':''}</div>
+        <div class="rec-t"><b>${esc(r.title)}</b><span>${r.date} · 단어 ${r.words||'?'}</span></div></button>`).join('')}
+      <div class="count" style="margin-top:18px">
+        <button class="step" data-a="minus">−</button>
+        <div class="count-n mincho">${S.want}<span>문제</span></div>
+        <button class="step" data-a="plus">＋</button></div>
+      <button class="b-red b-wide" data-a="mixgo" ${S.picked.length?'':'disabled'}>${S.picked.length}개 기록으로 시험 만들기</button>
+      <button class="b-ghost b-wide" data-a="close">닫기</button></div></div>`;
+  }
+  const at=s.attempts||[];
+  return `<div class="veil" data-a="veil"><div class="sheet">
+    <h3>${esc(s.title)}</h3>
+    <p class="meta">${s.date} · ${s.questions.length}문제 · 단어 ${(s.items||[]).length}개</p>
+    <input class="text" id="tt" value="${esc(s.title)}">
+    <button class="b-sm" style="margin-top:8px" data-a="rename">이름 저장</button>
+    <div class="sec">응시 기록</div>
+    ${at.length?at.map(a=>`<div class="log"><span>${a.date}</span><span class="mincho">${a.score} / ${a.total}</span></div>`).join('')
+      :'<p class="empty">아직 풀지 않았습니다.</p>'}
+    <button class="b-red b-wide" data-a="play">이 시험 다시 풀기</button>
+    <button class="b-line b-wide" data-a="regen">같은 단어로 새 문제 ${S.want}개 만들기</button>
+    <button class="b-ghost b-wide" data-a="del">이 기록 지우기</button>
+    <button class="b-ghost b-wide" data-a="close">닫기</button></div></div>`;
+}
+
+function viewQuiz(){
+  const q=S.set.questions[S.qi], last=S.ans[S.qi];
+  if(q.type==='match'&&!S.pair)S.pair={sel:null,done:{},miss:0,bad:null,order:shuffle(q.pairs.map((_,i)=>i))};
+  const P=S.pair;
+  let body='';
+  if(q.type==='match'){
+    body=`<div class="match" style="margin-top:18px"><div>${q.pairs.map((p,i)=>
+      `<button class="tile mincho ${P.sel===i?'sel':''} ${P.done[i]?'done':''}" data-a="k" data-i="${i}">${esc(p.k)}${P.done[i]?MARU:''}</button>`).join('')}</div>
+      <div>${P.order.map(i=>
+      `<button class="tile mincho ${P.done[i]?'done':''} ${P.bad===i?'bad':''}" style="font-size:17px" data-a="r" data-i="${i}">${esc(q.pairs[i].r)}${P.done[i]?MARU:''}</button>`).join('')}</div></div>
+      ${S.locked?'':'<p class="hint">왼쪽 한자 → 오른쪽 읽는 법 순서로 누르세요</p>'}`;
+  }else{
+    const jp=q.jp?`<div class="jp mincho">${ruby(q.jp,q.type==='short')}</div>`:'<div style="height:16px"></div>';
+    if(q.type==='choice'){
+      body=jp+q.choices.map((c,i)=>`<button class="choice ${S.locked&&(i===q.answer||i===last.given)?'on':''}"
+        data-a="c" data-i="${i}" ${S.locked?'disabled':''}>
+        <span class="mk mincho">${ABC[i]}</span><span class="mincho">${ruby(c)}</span>
+        ${S.locked&&i===q.answer?MARU:''}${S.locked&&i===last.given&&i!==q.answer?SLASH:''}</button>`).join('');
+    }else{
+      body=jp+`<input class="short mincho" ${S.locked?'disabled':''}
+        value="${esc(S.locked?last.given:S.typed)}" placeholder="${q.type==='short'?'ひらがな':'日本語で'}" data-a="typed">
+        ${S.locked?'':`<button class="b-red b-wide" data-a="grade" ${S.typed.trim()?'':'disabled'}>채점하기</button>`}`;
+    }
+  }
+  let fb='';
+  if(S.locked){
+    const ansTxt=q.type==='choice'?plain(q.choices[q.answer]):(q.answers||[]).join(' / ');
+    fb=`<div class="fb"><div class="fb-h ${last.ok?'o':''}">${last.ok?'○ 정답':'✕ 오답'}</div>
+      ${!last.ok&&q.type!=='match'?`<p style="margin-bottom:4px">정답 <b class="mincho">${esc(ansTxt)}</b></p>`:''}
+      ${!last.ok&&q.type==='match'?`<p style="margin-bottom:4px">${last.given}번 틀렸습니다</p>`:''}
+      ${q.explain?`<p>${esc(q.explain)}</p>`:''}
+      ${(q.type==='short'||q.type==='write')&&!last.ok?'<button class="b-ghost" data-a="ovr">사실 맞게 썼어요 (정답 처리)</button>':''}
+      <button class="b-red b-wide" data-a="next">${S.qi+1<S.set.questions.length?'다음 문제':'채점 결과 보기'}</button></div>`;
+  }
+  return head()+`<div class="track">${S.set.questions.map((_,i)=>
+    `<div class="cell ${i===S.qi?'now':''}">${S.ans[i]?`<svg viewBox="0 0 40 40"><path d="${S.ans[i].ok?
+      'M20 6 C 9 6 5 12 5 20 C 5 28 10 34 20 34 C 30 34 35 28 35 20 C 35 12 30 6 19 6':'M9 31 L31 9'}" stroke-width="3"/></svg>`:''}</div>`).join('')}</div>
+    <div class="qno mincho"><span>第${S.qi+1}問</span><i>${TYPE[q.type]||''}</i></div>
+    <p class="qtext">${esc(q.q)}</p>${body}${fb}
+    ${S.locked?'':'<button class="b-ghost b-wide" data-a="home">그만두기</button>'}`;
+}
+
+function viewResult(){
+  const score=S.ans.filter(a=>a.ok).length,total=S.set.questions.length,rate=score/total;
+  const l1=rate>=.9?'大変よく':rate>=.7?'よく':'もう一度', l2=rate>=.7?'できました':'やろう';
+  const F="'Hiragino Mincho ProN','Yu Mincho','Noto Serif JP',serif";
+  return head()+`<div class="stamp-area"><div class="stamp">
+    <svg width="146" height="146" viewBox="0 0 150 150">
+    <circle cx="75" cy="75" r="66" fill="none" stroke="#C8322B" stroke-width="4" opacity=".9"/>
+    <text x="75" y="68" text-anchor="middle" fill="#C8322B" font-size="26" font-family="${F}">${l1}</text>
+    <text x="75" y="100" text-anchor="middle" fill="#C8322B" font-size="22" font-family="${F}">${l2}</text>
+    </svg></div><div class="score"><b>${score}</b> / ${total}</div></div>
+    <div class="sec">채점표 · ${esc(S.set.title)}</div>
+    ${S.set.questions.map((q,i)=>{
+      const a=q.type==='choice'?plain(q.choices[q.answer]):q.type==='match'?
+        q.pairs.map(p=>p.k+'='+p.r).join(', '):(q.answers||[]).join(' / ');
+      return `<div class="rv"><div class="rv-m mincho">${S.ans[i]&&S.ans[i].ok?'○':'✕'}</div>
+      <div class="rv-b"><div class="rv-q mincho">${q.type==='match'?esc(q.pairs.map(p=>p.k).join(' · ')):ruby(q.jp)}</div>
+      <div class="rv-a">${esc(plain(q.q))}<br>정답 <i class="mincho">${esc(a)}</i>${q.explain?' · '+esc(q.explain):''}</div></div></div>`}).join('')}
+    <button class="b-red b-wide" data-a="again">같은 시험 다시 풀기</button>
+    <button class="b-line b-wide" data-a="regen2">같은 단어로 새 문제 만들기</button>
+    <button class="b-line b-wide" data-a="home">처음으로</button>
+    <p class="note">틀린 문제는 내일 한 번 더 풀면 훨씬 오래 남습니다.</p>`;
+}
+
+/* ═══ 이벤트 ═══ */
+async function addShots(list){
+  const files=[...list].slice(0,8-S.shots.length);
+  for(const f of files){
+    try{S.shots.push({full:await shrink(f,1200,.78),thumb:await shrink(f,200,.5)})}catch(e){}
+  }
+  render();
+}
+document.getElementById('cam').onchange=e=>{addShots(e.target.files);e.target.value=''};
+document.getElementById('pick').onchange=e=>{addShots(e.target.files);e.target.value=''};
+document.getElementById('imp').onchange=e=>{if(e.target.files[0])importAll(e.target.files[0]);e.target.value=''};
+
+document.addEventListener('input',e=>{
+  const a=e.target.dataset.a;
+  if(a==='typed'){S.typed=e.target.value;
+    const b=document.querySelector('[data-a="grade"]');if(b)b.disabled=!S.typed.trim()}
+  if(a==='rng'){S.want=+e.target.value;
+    const n=document.querySelector('.count-n');if(n)n.innerHTML=S.want+'<span>문제</span>';
+    const m=document.querySelector('[data-a="make"]');
+    if(m)m.textContent=`사진 ${S.shots.length}장으로 ${S.want}문제 만들기`}
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&e.target.dataset.a==='typed'&&S.typed.trim()&&!S.locked)submit();
+});
+
+document.addEventListener('click',async e=>{
+  const t=e.target.closest('[data-a]');if(!t)return;
+  const a=t.dataset.a, i=+t.dataset.i, id=t.dataset.id;
+  const idx=getJ(IDX,[]);
+  switch(a){
+    case 'savekey':{const v=document.getElementById('k').value.trim();
+      if(!v)return;LS.set(KEY,v);S.err='';render();break}
+    case 'savekey2':{LS.set(KEY,document.getElementById('k2').value.trim());
+      LS.set(MODEL,document.getElementById('m2').value.trim()||'gemini-2.5-flash');
+      S.sheet=null;render();break}
+    case 'settings':S.sheet={kind:'settings'};render();break;
+    case 'savename':{setJ(PROF,{name:document.getElementById('nm').value.trim()});S.sheet=null;render();break}
+    case 'export':exportAll();break;
+    case 'import':document.getElementById('imp').click();break;
+    case 'veil':if(e.target===t){S.sheet=null;render()}break;
+    case 'close':S.sheet=null;render();break;
+    case 'cam':document.getElementById('cam').click();break;
+    case 'pick':document.getElementById('pick').click();break;
+    case 'unshot':S.shots.splice(i,1);render();break;
+    case 'minus':S.want=Math.max(10,S.want-10);render();break;
+    case 'plus':S.want=Math.min(100,S.want+10);render();break;
+    case 'make':fromPhotos();break;
+    case 'open':S.sheet=getJ('jq:set:'+id,null);render();break;
+    case 'mix':S.sheet={kind:'mix'};render();break;
+    case 'tick':S.picked=S.picked.includes(id)?S.picked.filter(x=>x!==id):[...S.picked,id];render();break;
+    case 'mixgo':fromHistory();break;
+    case 'rename':{const v=document.getElementById('tt').value.trim();if(!v)return;
+      const s={...S.sheet,title:v};setJ('jq:set:'+s.id,s);
+      setJ(IDX,idx.map(r=>r.id===s.id?{...r,title:v}:r));S.sheet=s;render();break}
+    case 'del':{LS.del('jq:set:'+S.sheet.id);
+      setJ(IDX,idx.filter(r=>r.id!==S.sheet.id));S.sheet=null;render();break}
+    case 'play':{const s=S.sheet;S.sheet=null;begin(s);break}
+    case 'regen':regen(S.sheet);break;
+    case 'regen2':regen(S.set);break;
+    case 'again':begin(S.set);break;
+    case 'home':S.view='home';S.err='';render();break;
+    case 'c':submit(i);break;
+    case 'grade':submit();break;
+    case 'ovr':S.ans[S.ans.length-1].ok=true;render();break;
+    case 'next':next();break;
+    case 'k':{if(S.locked||S.pair.done[i])return;
+      S.pair.sel=S.pair.sel===i?null:i;S.pair.bad=null;render();break}
+    case 'r':{const P=S.pair;const q=S.set.questions[S.qi];
+      if(S.locked||P.sel==null||P.done[i])return;
+      if(P.sel===i){P.done[i]=true;P.sel=null;P.bad=null;
+        if(Object.keys(P.done).length===q.pairs.length){mark(P.miss===0,P.miss);return}
+      }else{P.miss++;P.bad=i;P.sel=null}
+      render();break}
+  }
+});
+render();
+</script>
+</body>
+</html>
