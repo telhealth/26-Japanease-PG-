@@ -198,18 +198,28 @@ function shrink(file,max,q){return new Promise((res,rej)=>{
 async function ask(parts){
   const key=LS.get(KEY), model=LS.get(MODEL)||'gemini-2.5-flash';
   const url=`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
-  const body={contents:[{role:'user',parts}],
-    generationConfig:{temperature:.8,maxOutputTokens:4000,responseMimeType:'application/json'}};
-  for(let t=0;t<4;t++){
+  const gc={temperature:.8,maxOutputTokens:8192,responseMimeType:'application/json',
+    thinkingConfig:{thinkingBudget:0}};
+  const body={contents:[{role:'user',parts}],generationConfig:gc};
+  for(let t=0;t<5;t++){
     const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    if(r.status===429||r.status===503){await sleep(2000*(t+1));continue}
-    const d=await r.json();
-    if(d.error)throw Error(d.error.message||'API 오류');
+    if(r.status===429||r.status===503){await sleep(2500*(t+1));continue}
+    const d=await r.json().catch(()=>({error:{message:'응답을 읽지 못했습니다 ('+r.status+')'}}));
+    if(d.error){
+      const m=d.error.message||'API 오류';
+      if(gc.thinkingConfig&&/thinking|unknown name|invalid json payload|not supported/i.test(m)){
+        delete gc.thinkingConfig;continue;
+      }
+      throw Error(m);
+    }
     const c=d.candidates&&d.candidates[0];
-    if(!c||!c.content)throw Error('빈 응답');
-    return c.content.parts.map(p=>p.text||'').join('');
+    if(!c)throw Error('후보 없음 '+JSON.stringify(d).slice(0,180));
+    const txt=((c.content&&c.content.parts)||[]).map(p=>p.text||'').join('');
+    if(txt)return txt;
+    if(c.finishReason==='MAX_TOKENS'&&gc.thinkingConfig){delete gc.thinkingConfig;continue}
+    throw Error('빈 응답 (finishReason: '+(c.finishReason||'?')+')');
   }
-  throw Error('요청이 많아 잠시 막혔습니다. 1분 뒤 다시 해주세요.');
+  throw Error('요청이 계속 실패했습니다. 1분 뒤 다시 해주세요.');
 }
 function unwrap(v){
   if(Array.isArray(v))return v;
@@ -225,10 +235,10 @@ function loose(t){
   }
 }
 async function pool(tasks,limit,tick){
-  const out=[];let i=0;
+  const out=[];out.errors=[];let i=0;
   await Promise.all(Array.from({length:Math.min(limit,tasks.length)},async()=>{
     while(i<tasks.length){const k=i++;
-      try{out[k]=await tasks[k]()}catch(e){out[k]=null;console.warn(e)}
+      try{out[k]=await tasks[k]()}catch(e){out[k]=null;out.errors.push(e.message);console.warn(e)}
       tick&&tick()}
   }));
   return out;
@@ -286,7 +296,7 @@ async function build(o){
       qs.push(q);
     }
   }
-  if(!qs.length)throw Error('문제를 만들지 못했습니다');
+  if(!qs.length)throw Error('문제를 만들지 못했습니다'+(got.errors&&got.errors.length?':\n'+got.errors[0]:''));
   const base=o.base;
   const set={id:base?base.id:'s'+Date.now(), title:base?base.title:o.title,
     date:base?base.date:today(), thumb:base?base.thumb:o.thumb,
@@ -314,7 +324,9 @@ async function fromPhotos(){
     for(const arr of packs)if(Array.isArray(arr))for(const it of arr){
       if(!it||!it.jp||seen.has(it.jp))continue;seen.add(it.jp);items.push(it)}
     if(!items.length){S.prog=null;
-      S.err='사진에서 일본어를 찾지 못했습니다. 한 페이지씩 가까이, 글씨가 크게 나오도록 찍어 보세요.'
+      S.err=(packs.errors&&packs.errors.length
+        ? '오류가 났습니다:\n'+packs.errors[0]
+        : '사진에서 일본어를 찾지 못했습니다.')
         +(raw?'\n\n[응답] '+raw.slice(0,300):'');
       return render()}
     const n=S.shots.length, thumb=S.shots[0].thumb;
