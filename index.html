@@ -139,7 +139,7 @@ input.short:focus{outline:none;border-color:var(--red)}
 .rv-a i{font-style:normal;color:var(--red);font-weight:600}
 
 .err{background:#FBF0EE;border-left:3px solid var(--red);padding:13px 15px;font-size:13.5px;
-  line-height:1.7;margin-top:16px;word-break:break-word}
+  line-height:1.7;margin-top:16px;word-break:break-word;white-space:pre-wrap}
 .note{font-size:11.5px;color:#8d8674;line-height:1.7;margin-top:20px;text-align:center}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms !important}}
 </style>
@@ -211,9 +211,14 @@ async function ask(parts){
   }
   throw Error('요청이 많아 잠시 막혔습니다. 1분 뒤 다시 해주세요.');
 }
+function unwrap(v){
+  if(Array.isArray(v))return v;
+  if(v&&typeof v==='object'){for(const k in v)if(Array.isArray(v[k]))return v[k]}
+  return v;
+}
 function loose(t){
   const s=String(t).replace(/```json|```/g,'').trim();
-  try{return JSON.parse(s)}catch(e){
+  try{return unwrap(JSON.parse(s))}catch(e){
     const a=s.indexOf('['),c=s.lastIndexOf('}');
     if(a<0||c<a)throw e;
     return JSON.parse(s.slice(a,c+1)+']');
@@ -229,12 +234,18 @@ async function pool(tasks,limit,tick){
   return out;
 }
 
-const EXTRACT=`이 사진은 일본어 학습 교재의 한 페이지입니다. 학습자가 외워야 할 항목을 뽑아 주세요.
-- 사진에 실제로 보이는 단어·한자·문형·예문만. 없는 내용은 절대 만들지 않는다.
-- 최대 15개.
-- jp: 일본어 표기(한자 그대로). yomi: 히라가나 읽기. ko: 한국어 뜻. ex: 사진 속 예문(없으면 "").
+const EXTRACT=`이 사진에서 일본어를 모두 찾아 학습 항목으로 정리해 주세요.
+교재, 손으로 쓴 노트, 필기, 프린트, 칠판, 메모 등 어떤 형태여도 상관없습니다.
+글씨가 흐리거나 삐뚤어도 최대한 읽어 주세요.
+
+- 사진에 실제로 보이는 일본어 단어·한자·문형·예문만 사용한다. 사진에 없는 내용은 만들지 않는다.
+- 히라가나만 있는 단어, 카타카나 단어도 모두 포함한다.
+- 한국어 뜻이 옆에 적혀 있으면 그대로 쓰고, 없으면 직접 채워 넣는다.
+- 최대 15개. 한 개라도 찾으면 반드시 배열에 담아 출력한다.
+- jp: 일본어 표기. yomi: 히라가나 읽기. ko: 한국어 뜻. ex: 사진 속 예문(없으면 "").
+
 JSON 배열만 출력: [{"jp":"勉強","yomi":"べんきょう","ko":"공부","ex":"毎日勉強します"}]
-일본어 교재가 아니면 [] 만 출력.`;
+일본어가 정말 하나도 없을 때만 [] 를 출력한다.`;
 
 const genPrompt=(items,n,avoid)=>`아래는 학습자가 공부한 일본어 항목입니다.
 ${JSON.stringify(items)}
@@ -292,15 +303,23 @@ async function fromPhotos(){
   S.err='';if(!S.shots.length)return;
   S.prog={label:'사진에서 단어를 뽑는 중',done:0,total:S.shots.length};render();
   try{
-    const tasks=S.shots.map(s=>async()=>loose(await ask([
-      {inline_data:{mime_type:'image/jpeg',data:s.full.split(',')[1]}},{text:EXTRACT}])));
+    let raw='';
+    const tasks=S.shots.map(s=>async()=>{
+      const t=await ask([{inline_data:{mime_type:'image/jpeg',data:s.full.split(',')[1]}},{text:EXTRACT}]);
+      if(!raw)raw=t;
+      return loose(t);
+    });
     const packs=await pool(tasks,2,()=>{S.prog.done++;render()});
     const items=[],seen=new Set();
     for(const arr of packs)if(Array.isArray(arr))for(const it of arr){
       if(!it||!it.jp||seen.has(it.jp))continue;seen.add(it.jp);items.push(it)}
-    if(!items.length){S.prog=null;S.err='사진에서 일본어를 찾지 못했습니다. 글씨가 선명하게 나오도록 다시 찍어 주세요.';return render()}
-    const n=S.shots.length;S.shots=[];
-    await build({items,thumb:S.shots[0]?S.shots[0].thumb:packs.thumb,title:`${today()} 교재 ${n}장`});
+    if(!items.length){S.prog=null;
+      S.err='사진에서 일본어를 찾지 못했습니다. 한 페이지씩 가까이, 글씨가 크게 나오도록 찍어 보세요.'
+        +(raw?'\n\n[응답] '+raw.slice(0,300):'');
+      return render()}
+    const n=S.shots.length, thumb=S.shots[0].thumb;
+    S.shots=[];
+    await build({items,thumb,title:`${today()} 노트 ${n}장`});
   }catch(e){S.prog=null;S.err=e.message;render()}
 }
 
@@ -549,7 +568,7 @@ function viewResult(){
 async function addShots(list){
   const files=[...list].slice(0,8-S.shots.length);
   for(const f of files){
-    try{S.shots.push({full:await shrink(f,1200,.78),thumb:await shrink(f,200,.5)})}catch(e){}
+    try{S.shots.push({full:await shrink(f,1600,.88),thumb:await shrink(f,200,.5)})}catch(e){}
   }
   render();
 }
