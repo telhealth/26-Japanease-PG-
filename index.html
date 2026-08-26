@@ -96,9 +96,9 @@ input.text:focus{outline:none;border-color:var(--ink)}
 .qno{font-size:12px;letter-spacing:.28em;color:var(--red);margin-bottom:9px;display:flex;justify-content:space-between}
 .qno i{font-style:normal;color:#8d8674;letter-spacing:.1em}
 .qtext{font-size:17px;line-height:1.65;word-break:keep-all}
-.jp{font-size:26px;line-height:1.9;margin:16px 0 22px;border-left:3px solid var(--red);padding-left:14px}
+.jp{font-size:30px;line-height:1.9;margin:16px 0 22px;border-left:3px solid var(--red);padding-left:14px}
 .choice{position:relative;display:flex;align-items:flex-start;gap:12px;width:100%;background:#FBF9F2;
-  border:1px solid var(--faint);padding:14px 15px;text-align:left;margin-bottom:9px;font-size:16px;line-height:1.7}
+  border:1px solid var(--faint);padding:15px 15px;text-align:left;margin-bottom:9px;font-size:19px;line-height:1.75}
 .choice .mk{flex:none;width:22px;height:22px;border:1px solid var(--grid);display:grid;
   place-items:center;font-size:12px;color:#8d8674;margin-top:3px}
 .choice.on{border-color:var(--ink)}
@@ -107,13 +107,13 @@ svg.pen{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;ove
   stroke-dasharray:1200;stroke-dashoffset:1200;animation:draw .5s ease-out forwards}
 @keyframes draw{to{stroke-dashoffset:0}}
 
-input.short{width:100%;font:inherit;font-size:22px;padding:12px 14px;background:#FBF9F2;border:none;
+input.short{width:100%;font:inherit;font-size:25px;padding:12px 14px;background:#FBF9F2;border:none;
   border-bottom:2px solid var(--ink);border-radius:0;text-align:center}
 input.short:focus{outline:none;border-color:var(--red)}
 
 .match{display:grid;grid-template-columns:1fr 1fr;gap:9px}
 .tile{position:relative;background:#FBF9F2;border:1px solid var(--faint);padding:14px 8px;
-  font-size:19px;text-align:center;line-height:1.4;margin-bottom:9px;width:100%}
+  font-size:22px;text-align:center;line-height:1.4;margin-bottom:9px;width:100%}
 .tile.sel{border-color:var(--ink);border-width:1.5px;background:#F2EEE0}
 .tile.done{opacity:.55}
 .tile.bad{animation:shake .3s}
@@ -124,6 +124,11 @@ input.short:focus{outline:none;border-color:var(--red)}
 .fb-h{font-size:15px;font-weight:700;margin-bottom:5px}
 .fb-h.o{color:var(--red)}
 .fb p{font-size:13.5px;line-height:1.7;color:#5f5949}
+.gloss{margin-top:10px;border-top:1px dotted var(--faint);padding-top:9px}
+.gloss div{display:flex;align-items:baseline;gap:8px;padding:3px 0;font-size:13.5px}
+.gloss b{font-size:17px;font-weight:500;flex:none}
+.gloss i{font-style:normal;font-size:11.5px;color:#8d8674;flex:none}
+.gloss span{color:#5f5949}
 
 .stamp-area{text-align:center;padding:26px 0 4px}
 .stamp{display:inline-block;animation:press .5s cubic-bezier(.2,1.5,.4,1) both}
@@ -134,7 +139,7 @@ input.short:focus{outline:none;border-color:var(--red)}
 .rv{border-bottom:1px solid var(--faint);padding:12px 2px;display:flex;gap:11px;align-items:flex-start}
 .rv-m{font-size:15px;color:var(--red);flex:none;width:18px;text-align:center;line-height:1.6}
 .rv-b{flex:1;min-width:0}
-.rv-q{font-size:14px;line-height:1.7}
+.rv-q{font-size:17px;line-height:1.8}
 .rv-a{font-size:12.5px;color:#5f5949;line-height:1.6}
 .rv-a i{font-style:normal;color:var(--red);font-weight:600}
 
@@ -222,7 +227,19 @@ async function ask(parts){
       throw Error('네트워크 오류: '+e.message);
     }finally{clearInterval(tk);clearTimeout(to)}
 
-    if(r.status===429||r.status===503){setNote('한도 대기 중...');await sleep(3000*(t+1));continue}
+    if(r.status===429||r.status===503){
+      let wait=Math.min(70,10*(t+1));
+      try{
+        const j=await r.json();
+        const det=(j&&j.error&&j.error.details)||[];
+        for(const x of det){
+          const rd=x&&(x.retryDelay||x.retry_delay);
+          if(rd){const s=parseInt(rd,10);if(s>0)wait=Math.min(90,s+3)}
+        }
+      }catch(e){}
+      for(let s=wait;s>0;s--){setNote(`무료 한도 대기 ${s}초`);await sleep(1000)}
+      continue;
+    }
     const d=await r.json().catch(()=>({error:{message:'응답을 읽지 못했습니다 ('+r.status+')'}}));
 
     if(d.error){
@@ -288,17 +305,31 @@ const genPrompt=(items,n,avoid)=>`아래는 학습자가 공부한 일본어 항
 ${JSON.stringify(items)}
 
 이 항목만 사용해 시험 문제 ${n}개를 만드세요. JSON 배열만 출력.
+
 형식(4종을 골고루 섞을 것):
-{"type":"choice","q":"한국어 질문","jp":"日本語(にほんご)","choices":["","","",""],"answer":0,"explain":""}
-{"type":"short","q":"밑줄 친 단어의 읽는 법을 쓰세요","jp":"勉強","answers":["べんきょう"],"explain":""}
-{"type":"write","q":"'공부하다'를 일본어로 쓰세요","jp":"","answers":["勉強する","べんきょうする"],"explain":""}
-{"type":"match","q":"한자와 읽는 법을 연결하세요","pairs":[{"k":"勉強","r":"べんきょう"}],"explain":""}
-규칙:
+{"type":"choice","q":"한국어 질문","jp":"日本語(にほんご)","choices":["","","",""],"answer":0,"explain":"","level":1,"words":[{"w":"日本語","k":"일본어"}]}
+{"type":"short","q":"밑줄 친 단어의 읽는 법을 쓰세요","jp":"勉強","answers":["べんきょう"],"explain":"","level":1,"words":[]}
+{"type":"write","q":"'공부하다'를 일본어로 쓰세요","jp":"","answers":["勉強する","べんきょうする"],"explain":"","level":2,"words":[]}
+{"type":"match","q":"한자와 읽는 법을 연결하세요","pairs":[{"k":"勉強","r":"べんきょう"}],"explain":"","level":1,"words":[]}
+
+난이도를 반드시 섞을 것:
+- level 1 (쉬움): 단어 뜻 고르기, 읽는 법, 한자-읽기 연결
+- level 2 (보통): 예문의 빈칸 채우기, 조사·활용형 고르기, 뜻 보고 단어 쓰기
+- level 3 (어려움): 짧은 문장의 한국어 해석 고르기, 한국어 문장을 일본어로 쓰기
+전체의 약 40%를 level 1, 40%를 level 2, 20%를 level 3으로.
+
+예문 문제를 반드시 포함할 것:
+- 항목의 ex를 쓰거나, 위 항목의 단어들만 조합해 짧은 예문(10자 내외)을 만든다.
+- 예문에 빈칸(＿＿)을 뚫고 들어갈 말을 고르게 하거나, 예문의 뜻을 묻는다.
+
+공통 규칙:
 - 모든 한자에 (읽는법) 후리가나를 괄호로 붙인다. 예: 毎日(まいにち)勉強(べんきょう)します
 - 단, "short" 문제의 jp에는 후리가나를 절대 붙이지 않는다(정답 노출 금지).
 - match는 pairs 정확히 4쌍. pairs의 k에는 후리가나를 붙이지 않는다.
 - write의 answers에는 한자·히라가나 표기를 모두 넣는다.
-- q는 한국어. explain은 20자 이내 한국어.
+- words: 문제에 나온 주요 단어를 2~5개. 예문 문제면 예문에 쓰인 단어를 모두 넣는다.
+  w는 후리가나 없는 일본어 표기, k는 한국어 뜻.
+- q는 한국어. explain은 25자 이내 한국어.
 ${avoid.length?'- 이미 출제된 단어는 피할 것: '+avoid.slice(0,40).join(','):''}`;
 
 /* ═══ 생성 ═══ */
@@ -311,7 +342,7 @@ async function build(o){
     const n=Math.min(per,need-b*per);
     tasks.push(async()=>loose(await ask([{text:genPrompt(shuffle(o.items).slice(0,14),n,avoid)}])));
   }
-  const got=await pool(tasks,2,()=>{S.prog.done++;render()});
+  const got=await pool(tasks,1,()=>{S.prog.done++;render()});
   const qs=[];
   for(const arr of got){
     if(!Array.isArray(arr))continue;
@@ -346,7 +377,7 @@ async function fromPhotos(){
       if(!raw)raw=t;
       return loose(t);
     });
-    const packs=await pool(tasks,2,()=>{S.prog.done++;render()});
+    const packs=await pool(tasks,1,()=>{S.prog.done++;render()});
     const items=[],seen=new Set();
     for(const arr of packs)if(Array.isArray(arr))for(const it of arr){
       if(!it||!it.jp||seen.has(it.jp))continue;seen.add(it.jp);items.push(it)}
@@ -425,6 +456,30 @@ function importAll(file){
   fr.readAsText(file);
 }
 
+function wordList(q){
+  const out=[],seen=new Set();
+  const add=(w,k,y)=>{w=plain(w||'').trim();if(!w||seen.has(w))return;seen.add(w);out.push({w,k:k||'',y:y||''})};
+  (q.words||[]).forEach(x=>x&&add(x.w,x.k));
+  const hay=plain([q.jp||'',(q.choices||[]).join(''),(q.answers||[]).join(''),
+    (q.pairs||[]).map(p=>p.k+p.r).join('')].join(''));
+  ((S.set&&S.set.items)||[]).forEach(it=>{
+    if(!it||!it.jp)return;
+    if(hay.includes(it.jp)){
+      const hit=out.find(o=>o.w===it.jp);
+      if(hit){if(!hit.k)hit.k=it.ko||'';if(!hit.y)hit.y=it.yomi||''}
+      else add(it.jp,it.ko,it.yomi);
+    }
+  });
+  return out;
+}
+function glossHTML(q){
+  const w=wordList(q);
+  if(!w.length)return'';
+  return `<div class="gloss">${w.map(x=>
+    `<div><b class="mincho">${esc(x.w)}</b>${x.y?`<i class="mincho">${esc(x.y)}</i>`:''}<span>${esc(x.k)}</span></div>`
+  ).join('')}</div>`;
+}
+
 /* ═══ 화면 ═══ */
 const MARU='<svg class="pen" viewBox="0 0 320 62" preserveAspectRatio="none"><path d="M160 5 C 60 5 8 18 8 31 C 8 45 62 57 160 57 C 258 57 312 45 312 31 C 312 18 262 5 158 5" stroke-width="2.2"/></svg>';
 const SLASH='<svg class="pen" viewBox="0 0 320 62" preserveAspectRatio="none"><path d="M20 52 L300 10" stroke-width="2.2"/></svg>';
@@ -453,10 +508,28 @@ function render(){
 function viewKey(){
   return `<div class="head"><div class="brand mincho">添削<em>ノート</em></div></div>
   <div class="genko"><div class="genko-title mincho">はじめに</div>
-  <p class="genko-desc">Google AI Studio에서 받은 API 키를 넣어 주세요.<br>이 기기에만 저장되고 어디로도 전송되지 않습니다.</p>
-  <input class="text" id="k" placeholder="AIza..." autocomplete="off">
+  <p class="genko-desc">교재 사진을 올리면 시험 문제를 만들어 주는 앱입니다.<br>
+  쓰려면 무료 API 키가 하나 필요해요.</p>
+  <input class="text" id="k" placeholder="여기에 키 붙여넣기" autocomplete="off">
   <button class="b-red b-wide" data-a="savekey">시작하기</button></div>
-  <p class="note">aistudio.google.com → Get API key<br>카드 등록 없이 무료로 발급됩니다.</p>
+
+  <div class="sec">키 받는 법 · 2분</div>
+  <p class="empty">
+  <b>1.</b> 아래 버튼 → 구글 계정으로 로그인<br>
+  <b>2.</b> <b>API 키 만들기</b> 누르기<br>
+  <b>3.</b> 프로젝트를 고르라고 나오면 <b>목록에 있는 아무거나</b> 선택.<br>
+  &nbsp;&nbsp;&nbsp;아무것도 없으면 <b>프로젝트 만들기</b> → 이름은 아무거나<br>
+  &nbsp;&nbsp;&nbsp;(<b>프로젝트 가져오기</b>는 누르지 마세요)<br>
+  <b>4.</b> 만들어진 키를 복사 → 위 칸에 붙여넣기
+  </p>
+  <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"
+     style="display:block;text-align:center;text-decoration:none">
+    <span class="b-line b-wide" style="display:block">키 발급받으러 가기</span></a>
+  <p class="note">
+  키가 <b>AQ.</b> 로 시작해도 정상입니다.<br>
+  무료이고 카드 등록도 없습니다.<br>
+  키는 이 기기에만 저장되고, 만든 사람도 볼 수 없습니다.<br>
+  공부 기록도 각자 폰에만 남습니다.</p>
   ${S.err?`<div class="err">${esc(S.err)}</div>`:''}`;
 }
 
@@ -549,7 +622,7 @@ function viewQuiz(){
     body=`<div class="match" style="margin-top:18px"><div>${q.pairs.map((p,i)=>
       `<button class="tile mincho ${P.sel===i?'sel':''} ${P.done[i]?'done':''}" data-a="k" data-i="${i}">${esc(p.k)}${P.done[i]?MARU:''}</button>`).join('')}</div>
       <div>${P.order.map(i=>
-      `<button class="tile mincho ${P.done[i]?'done':''} ${P.bad===i?'bad':''}" style="font-size:17px" data-a="r" data-i="${i}">${esc(q.pairs[i].r)}${P.done[i]?MARU:''}</button>`).join('')}</div></div>
+      `<button class="tile mincho ${P.done[i]?'done':''} ${P.bad===i?'bad':''}" style="font-size:20px" data-a="r" data-i="${i}">${esc(q.pairs[i].r)}${P.done[i]?MARU:''}</button>`).join('')}</div></div>
       ${S.locked?'':'<p class="hint">왼쪽 한자 → 오른쪽 읽는 법 순서로 누르세요</p>'}`;
   }else{
     const jp=q.jp?`<div class="jp mincho">${ruby(q.jp,q.type==='short')}</div>`:'<div style="height:16px"></div>';
@@ -571,13 +644,14 @@ function viewQuiz(){
       ${!last.ok&&q.type!=='match'?`<p style="margin-bottom:4px">정답 <b class="mincho">${esc(ansTxt)}</b></p>`:''}
       ${!last.ok&&q.type==='match'?`<p style="margin-bottom:4px">${last.given}번 틀렸습니다</p>`:''}
       ${q.explain?`<p>${esc(q.explain)}</p>`:''}
+      ${glossHTML(q)}
       ${(q.type==='short'||q.type==='write')&&!last.ok?'<button class="b-ghost" data-a="ovr">사실 맞게 썼어요 (정답 처리)</button>':''}
       <button class="b-red b-wide" data-a="next">${S.qi+1<S.set.questions.length?'다음 문제':'채점 결과 보기'}</button></div>`;
   }
   return head()+`<div class="track">${S.set.questions.map((_,i)=>
     `<div class="cell ${i===S.qi?'now':''}">${S.ans[i]?`<svg viewBox="0 0 40 40"><path d="${S.ans[i].ok?
       'M20 6 C 9 6 5 12 5 20 C 5 28 10 34 20 34 C 30 34 35 28 35 20 C 35 12 30 6 19 6':'M9 31 L31 9'}" stroke-width="3"/></svg>`:''}</div>`).join('')}</div>
-    <div class="qno mincho"><span>第${S.qi+1}問</span><i>${TYPE[q.type]||''}</i></div>
+    <div class="qno mincho"><span>第${S.qi+1}問</span><i>${'★'.repeat(Math.min(3,Math.max(1,q.level||1)))} ${TYPE[q.type]||''}</i></div>
     <p class="qtext">${esc(q.q)}</p>${body}${fb}
     ${S.locked?'':'<button class="b-ghost b-wide" data-a="home">그만두기</button>'}`;
 }
@@ -598,7 +672,8 @@ function viewResult(){
         q.pairs.map(p=>p.k+'='+p.r).join(', '):(q.answers||[]).join(' / ');
       return `<div class="rv"><div class="rv-m mincho">${S.ans[i]&&S.ans[i].ok?'○':'✕'}</div>
       <div class="rv-b"><div class="rv-q mincho">${q.type==='match'?esc(q.pairs.map(p=>p.k).join(' · ')):ruby(q.jp)}</div>
-      <div class="rv-a">${esc(plain(q.q))}<br>정답 <i class="mincho">${esc(a)}</i>${q.explain?' · '+esc(q.explain):''}</div></div></div>`}).join('')}
+      <div class="rv-a">${esc(plain(q.q))}<br>정답 <i class="mincho">${esc(a)}</i>${q.explain?' · '+esc(q.explain):''}</div>
+      ${glossHTML(q)}</div></div>`}).join('')}
     <button class="b-red b-wide" data-a="again">같은 시험 다시 풀기</button>
     <button class="b-line b-wide" data-a="regen2">같은 단어로 새 문제 만들기</button>
     <button class="b-line b-wide" data-a="home">처음으로</button>
