@@ -292,132 +292,134 @@ async function pool(tasks,limit,tick){
   return out;
 }
 
-const EXTRACT=`이 사진에서 일본어를 모두 찾아 학습 항목으로 정리해 주세요.
-교재, 손으로 쓴 노트, 필기, 프린트, 칠판, 메모 등 어떤 형태여도 상관없습니다.
-글씨가 흐리거나 삐뚤어도 최대한 읽어 주세요.
-
-- 사진에 실제로 보이는 일본어 단어·한자·문형·예문만 사용한다. 사진에 없는 내용은 만들지 않는다.
-- 히라가나만 있는 단어, 카타카나 단어도 모두 포함한다.
-- 한국어 뜻이 옆에 적혀 있으면 그대로 쓰고, 없으면 직접 채워 넣는다.
-- 최대 15개. 한 개라도 찾으면 반드시 배열에 담아 출력한다.
-- jp: 일본어 표기. yomi: 히라가나 읽기. ko: 한국어 뜻. ex: 사진 속 예문(없으면 "").
-
-JSON 배열만 출력: [{"jp":"勉強","yomi":"べんきょう","ko":"공부","ex":"毎日勉強します"}]
-일본어가 정말 하나도 없을 때만 [] 를 출력한다.`;
-
-const genPrompt=(items,n,avoid)=>`아래는 학습자가 공부한 일본어 항목입니다.
-${JSON.stringify(items)}
-
-이 항목만 사용해 시험 문제 ${n}개를 만드세요. JSON 배열만 출력.
-
-형식(4종을 골고루 섞을 것):
+const QRULES=`형식(4종을 골고루 섞을 것):
 {"type":"choice","q":"한국어 질문","jp":"日本語(にほんご)","choices":["","","",""],"answer":0,"explain":"","level":1,"words":[{"w":"日本語","k":"일본어"}]}
 {"type":"short","q":"밑줄 친 단어의 읽는 법을 쓰세요","jp":"勉強","answers":["べんきょう"],"explain":"","level":1,"words":[]}
 {"type":"write","q":"'공부하다'를 일본어로 쓰세요","jp":"","answers":["勉強する","べんきょうする"],"explain":"","level":2,"words":[]}
 {"type":"match","q":"한자와 읽는 법을 연결하세요","pairs":[{"k":"勉強","r":"べんきょう"}],"explain":"","level":1,"words":[]}
 
-난이도를 반드시 섞을 것:
-- level 1 (쉬움): 단어 뜻 고르기, 읽는 법, 한자-읽기 연결
-- level 2 (보통): 예문의 빈칸 채우기, 조사·활용형 고르기, 뜻 보고 단어 쓰기
-- level 3 (어려움): 짧은 문장의 한국어 해석 고르기, 한국어 문장을 일본어로 쓰기
-전체의 약 40%를 level 1, 40%를 level 2, 20%를 level 3으로.
-
-예문 문제를 반드시 포함할 것:
-- 항목의 ex를 쓰거나, 위 항목의 단어들만 조합해 짧은 예문(10자 내외)을 만든다.
-- 예문에 빈칸(＿＿)을 뚫고 들어갈 말을 고르게 하거나, 예문의 뜻을 묻는다.
+난이도를 반드시 섞을 것 (level 1 약 40%, 2 약 40%, 3 약 20%):
+- level 1: 단어 뜻 고르기, 읽는 법, 한자-읽기 연결
+- level 2: 예문 빈칸 채우기, 조사·활용형 고르기, 뜻 보고 단어 쓰기
+- level 3: 짧은 문장 해석 고르기, 한국어 문장을 일본어로 쓰기
+예문 문제를 반드시 포함할 것. 예문은 위 항목의 단어만 조합해 10자 내외로.
 
 공통 규칙:
 - 모든 한자에 (읽는법) 후리가나를 괄호로 붙인다. 예: 毎日(まいにち)勉強(べんきょう)します
-- 단, "short" 문제의 jp에는 후리가나를 절대 붙이지 않는다(정답 노출 금지).
+- 단, "short" 문제의 jp에는 후리가나를 붙이지 않는다(정답 노출 금지).
 - match는 pairs 정확히 4쌍. pairs의 k에는 후리가나를 붙이지 않는다.
 - write의 answers에는 한자·히라가나 표기를 모두 넣는다.
-- words: 문제에 나온 주요 단어를 2~5개. 예문 문제면 예문에 쓰인 단어를 모두 넣는다.
-  w는 후리가나 없는 일본어 표기, k는 한국어 뜻.
-- q는 한국어. explain은 25자 이내 한국어.
+- words: 문제에 나온 단어 2~4개. w는 후리가나 없는 표기, k는 한국어 뜻.
+- q는 한국어. explain은 20자 이내 한국어.`;
+
+// 사진 → 단어추출 + 문제생성을 한 번의 호출로 처리 (무료 한도 절약)
+const ONESHOT=n=>`이 사진들은 일본어 학습 자료입니다. 교재, 손으로 쓴 노트, 필기, 프린트 무엇이든 상관없습니다.
+글씨가 흐리거나 삐뚤어도 최대한 읽어 주세요.
+
+1단계 — items: 사진에 실제로 보이는 일본어 학습 항목을 최대 20개 뽑는다.
+  {"jp":"勉強","yomi":"べんきょう","ko":"공부","ex":"毎日勉強します"}
+  사진에 없는 내용은 만들지 않는다. 히라가나·카타카나 단어도 포함한다.
+
+2단계 — questions: 위 items만 사용해 시험 문제 ${n}개를 만든다.
+${QRULES}
+
+JSON 객체 하나만 출력. 코드블록·설명 금지:
+{"title":"이 자료의 주제 12자 이내","items":[...],"questions":[...]}
+일본어가 하나도 없으면 {"items":[],"questions":[]} 만 출력.`;
+
+const genPrompt=(items,n,avoid)=>`아래는 학습자가 공부한 일본어 항목입니다.
+${JSON.stringify(items)}
+
+이 항목만 사용해 시험 문제 ${n}개를 만드세요. JSON 배열만 출력.
+${QRULES}
 ${avoid.length?'- 이미 출제된 단어는 피할 것: '+avoid.slice(0,40).join(','):''}`;
 
 /* ═══ 생성 ═══ */
-async function build(o){
-  const need=20, per=20, batches=1;
-  S.prog={label:'문제를 만드는 중',done:0,total:batches};render();
-  const avoid=o.base?o.base.questions.map(q=>plain(q.jp||(q.pairs?q.pairs[0].k:''))).filter(Boolean):[];
-  const tasks=[];
-  for(let b=0;b<batches;b++){
-    const n=Math.min(per,need-b*per);
-    tasks.push(async()=>loose(await ask([{text:genPrompt(shuffle(o.items).slice(0,14),n,avoid)}])));
-  }
-  const got=await pool(tasks,1,()=>{S.prog.done++;render()});
+function cleanQs(arr){
   const qs=[];
-  for(const arr of got){
-    if(!Array.isArray(arr))continue;
-    for(const q of arr){
-      if(!q||!q.q)continue;
-      if(q.type==='match'&&(!q.pairs||q.pairs.length<2))continue;
-      if(q.type==='choice'&&(!q.choices||q.choices.length<2))continue;
-      if((q.type==='short'||q.type==='write')&&!q.answers)continue;
-      qs.push(q);
-    }
+  if(!Array.isArray(arr))return qs;
+  for(const q of arr){
+    if(!q||!q.q)continue;
+    if(q.type==='match'&&(!q.pairs||q.pairs.length<2))continue;
+    if(q.type==='choice'&&(!q.choices||q.choices.length<2))continue;
+    if((q.type==='short'||q.type==='write')&&!q.answers)continue;
+    qs.push(q);
   }
-  if(!qs.length)throw Error('문제를 만들지 못했습니다'+(got.errors&&got.errors.length?':\n'+got.errors[0]:''));
-  const base=o.base;
-  const set={id:base?base.id:'s'+Date.now(), title:base?base.title:o.title,
-    date:base?base.date:today(), thumb:base?base.thumb:o.thumb,
-    items:o.items, questions:qs.slice(0,need), attempts:base?base.attempts||[]:[]};
+  return qs;
+}
+function saveSet(set,isNew){
   setJ('jq:set:'+set.id,set);
   const idx=getJ(IDX,[]);
-  if(base) setJ(IDX,idx.map(r=>r.id===set.id?{...r,total:set.questions.length}:r));
-  else setJ(IDX,[{id:set.id,title:set.title,date:set.date,thumb:set.thumb,
-    total:set.questions.length,best:null,words:o.items.length},...idx]);
-  S.prog=null;begin(set);
+  if(isNew)setJ(IDX,[{id:set.id,title:set.title,date:set.date,thumb:set.thumb,
+    total:set.questions.length,best:null,words:(set.items||[]).length},...idx]);
+  else setJ(IDX,idx.map(r=>r.id===set.id?{...r,total:set.questions.length}:r));
 }
 
+// 사진 1회 호출: 단어 추출 + 문제 생성
 async function fromPhotos(){
   S.err='';S.cancel=false;if(!S.shots.length)return;
-  S.prog={label:'사진에서 단어를 뽑는 중',done:0,total:S.shots.length};render();
+  S.prog={label:'사진을 읽고 문제를 만드는 중',done:0,total:1};render();
+  let raw='';
   try{
-    let raw='';
-    const tasks=S.shots.map(s=>async()=>{
-      const t=await ask([{inline_data:{mime_type:'image/jpeg',data:s.full.split(',')[1]}},{text:EXTRACT}]);
-      if(!raw)raw=t;
-      return loose(t);
-    });
-    const packs=await pool(tasks,1,()=>{S.prog.done++;render()});
-    const items=[],seen=new Set();
-    for(const arr of packs)if(Array.isArray(arr))for(const it of arr){
-      if(!it||!it.jp||seen.has(it.jp))continue;seen.add(it.jp);items.push(it)}
-    if(!items.length){S.prog=null;
-      S.err=(packs.errors&&packs.errors.length
-        ? '오류가 났습니다:\n'+packs.errors[0]
-        : '사진에서 일본어를 찾지 못했습니다.')
-        +(raw?'\n\n[응답] '+raw.slice(0,300):'');
-      return render()}
-    const n=S.shots.length, thumb=S.shots[0].thumb;
+    const parts=S.shots.map(s=>({inline_data:{mime_type:'image/jpeg',data:s.full.split(',')[1]}}));
+    parts.push({text:ONESHOT(20)});
+    raw=await ask(parts);
+    const d=JSON.parse(raw.replace(/```json|```/g,'').trim());
+    const items=(d.items||[]).filter(x=>x&&x.jp);
+    const qs=cleanQs(d.questions);
+    if(!qs.length){
+      S.prog=null;
+      S.err=items.length?'문제를 만들지 못했습니다. 다시 시도해 주세요.'
+        :'사진에서 일본어를 찾지 못했습니다. 한 페이지씩 크게 찍어 보세요.';
+      return render();
+    }
+    const set={id:'s'+Date.now(), title:d.title||`${today()} 노트`, date:today(),
+      thumb:S.shots[0].thumb, items, questions:qs.slice(0,20), attempts:[]};
     S.shots=[];
-    await build({items,thumb,title:`${today()} 노트 ${n}장`});
-  }catch(e){S.prog=null;S.err=e.message==='CANCEL'?'':e.message;render()}
+    saveSet(set,true);
+    S.prog=null;begin(set);
+  }catch(e){
+    S.prog=null;
+    if(e.message==='CANCEL')S.err='';
+    else if(e instanceof SyntaxError)S.err='응답을 읽지 못했습니다. 다시 시도해 주세요.\n\n'+raw.slice(0,200);
+    else S.err=e.message;
+    render();
+  }
+}
+
+// 저장된 단어로 문제만 생성 (사진 없음, 1회 호출)
+async function makeFrom(items,o){
+  S.prog={label:'문제를 만드는 중',done:0,total:1};render();
+  const avoid=o.base?o.base.questions.map(q=>plain(q.jp||(q.pairs&&q.pairs[0]?q.pairs[0].k:''))).filter(Boolean):[];
+  const arr=loose(await ask([{text:genPrompt(shuffle(items).slice(0,20),20,avoid)}]));
+  const qs=cleanQs(arr);
+  if(!qs.length)throw Error('문제를 만들지 못했습니다. 다시 시도해 주세요.');
+  const b=o.base;
+  const set={id:b?b.id:'s'+Date.now(), title:b?b.title:o.title, date:b?b.date:today(),
+    thumb:b?b.thumb:o.thumb, items, questions:qs.slice(0,20), attempts:b?b.attempts||[]:[]};
+  saveSet(set,!b);
+  S.prog=null;begin(set);
 }
 
 async function fromHistory(){
   S.err='';S.cancel=false;if(!S.picked.length)return;
-  const idx=getJ(IDX,[]);
-  S.sheet=null;S.prog={label:'공부 기록을 모으는 중',done:0,total:S.picked.length};render();
+  S.sheet=null;
   try{
     const items=[],seen=new Set();let thumb=null;
     for(const id of S.picked){
       const s=getJ('jq:set:'+id,null);if(!s)continue;
       if(!thumb)thumb=s.thumb;
       for(const it of s.items||[]){if(it&&it.jp&&!seen.has(it.jp)){seen.add(it.jp);items.push(it)}}
-      S.prog.done++;render();
     }
     if(!items.length)throw Error('단어가 없습니다');
     const n=S.picked.length;S.picked=[];
-    await build({items,thumb,title:`모아 보기 · ${n}회분`});
+    await makeFrom(items,{thumb,title:`모아 보기 · ${n}회분`});
   }catch(e){S.prog=null;S.err=e.message==='CANCEL'?'':e.message;render()}
 }
 
 async function regen(set){
   S.sheet=null;S.err='';S.cancel=false;
-  try{await build({items:set.items,base:set})}
+  try{await makeFrom(set.items||[],{base:set})}
   catch(e){S.prog=null;S.err=e.message==='CANCEL'?'':e.message;render()}
 }
 
@@ -580,6 +582,11 @@ function viewSheet(){
       <input class="text" id="m2" style="margin-top:8px" value="${esc(LS.get(MODEL)||'gemini-3.6-flash')}" placeholder="모델명">
       <button class="b-sm" style="margin-top:8px" data-a="savekey2">저장</button>
       <button class="b-sm" style="margin-top:8px;margin-left:6px" data-a="test">연결 테스트</button>
+      <button class="b-sm" style="margin-top:8px;margin-left:6px" data-a="models">쓸 수 있는 모델 보기</button>
+      ${S.models&&S.models.length?`<div class="sec">내 키로 쓸 수 있는 모델</div>`+
+        S.models.map(m=>`<button class="rec" data-a="usemodel" data-m="${esc(m)}">
+          <div class="rec-t"><b>${esc(m)}</b><span>${m.includes('lite')?'가볍고 한도 넉넉함 · 추천':''}</span></div>
+          <div class="rec-s">선택</div></button>`).join(''):''}
       ${S.test?`<div class="err">${esc(S.test)}</div>`:''}
       <button class="b-ghost b-wide" data-a="close">닫기</button></div></div>`;
   }
@@ -711,7 +718,25 @@ document.addEventListener('click',async e=>{
       LS.set(MODEL,document.getElementById('m2').value.trim()||'gemini-3.6-flash');LS.del(AUTHK);LS.del(MODEK);
       S.sheet=null;render();break}
     case 'stop':S.cancel=true;S.prog=null;S.err='';S.view='home';render();break;
-    case 'settings':S.sheet={kind:'settings'};S.test='';render();break;
+    case 'settings':S.sheet={kind:'settings'};S.test='';S.models=[];render();break;
+    case 'models':{
+      LS.set(KEY,document.getElementById('k2').value.trim());
+      S.test='모델 목록을 불러오는 중...';S.models=[];render();
+      try{
+        const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models',
+          {headers:{'x-goog-api-key':(LS.get(KEY)||'').trim()}});
+        const d=await r.json();
+        if(d.error)throw Error(d.error.message);
+        S.models=(d.models||[])
+          .filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent'))
+          .map(m=>String(m.name||'').replace('models/',''))
+          .filter(n=>/flash|lite/i.test(n));
+        S.test=S.models.length?'아래에서 고르세요. lite가 무료 한도에 여유가 있습니다.':'목록이 비어 있습니다.';
+      }catch(err){S.test='실패 ✕ '+err.message}
+      render();break}
+    case 'usemodel':{
+      LS.set(MODEL,t.dataset.m);LS.del(AUTHK);LS.del(MODEK);
+      S.test='모델을 '+t.dataset.m+' 으로 바꿨습니다.';S.models=[];render();break}
     case 'test':{
       LS.set(KEY,document.getElementById('k2').value.trim());
       LS.set(MODEL,document.getElementById('m2').value.trim()||'gemini-3.6-flash');LS.del(AUTHK);LS.del(MODEK);
