@@ -168,7 +168,7 @@ const getJ=(k,d)=>{try{return JSON.parse(LS.get(k))??d}catch(e){return d}};
 const setJ=(k,v)=>LS.set(k,JSON.stringify(v));
 
 const KEY='jq:key', MODEL='jq:model', PROF='jq:profile', IDX='jq:index';
-let S={view:'home',shots:[],want:20,err:'',prog:null,set:null,qi:0,ans:[],typed:'',
+let S={view:'home',shots:[],want:20,cancel:false,err:'',prog:null,set:null,qi:0,ans:[],typed:'',
        locked:false,pair:null,sheet:null,picked:[]};
 
 /* ═══ 유틸 ═══ */
@@ -207,9 +207,10 @@ async function ask(parts){
   const base=`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   // auth 0: x-goog-api-key 헤더 / 1: ?key= 쿼리
   // mode 0: 생각끄기+JSON / 1: JSON만 / 2: 옵션 없음
-  let auth=+(LS.get(AUTHK)||0), mode=+(LS.get(MODEK)||0), lastErr='';
+  let auth=+(LS.get(AUTHK)||0), mode=+(LS.get(MODEK)||0), lastErr='', waits=0;
+  if(S.cancel)throw Error('CANCEL');
   for(let t=0;t<8;t++){
-    const gc={temperature:.8,maxOutputTokens:8192};
+    const gc={temperature:.8,maxOutputTokens:16384};
     if(mode<2)gc.responseMimeType='application/json';
     if(mode<1)gc.thinkingConfig={thinkingLevel:'low'};
     const url=base+(auth===1?'?key='+encodeURIComponent(key):'');
@@ -229,6 +230,8 @@ async function ask(parts){
     }finally{clearInterval(tk);clearTimeout(to)}
 
     if(r.status===429||r.status===503){
+      waits++;
+      if(waits>2)throw Error('오늘 무료 한도를 거의 다 쓴 것 같습니다.\n잠시 뒤(또는 내일) 다시 시도해 주세요.\n이미 만들어 둔 시험은 한도와 상관없이 계속 풀 수 있습니다.');
       let wait=Math.min(70,10*(t+1));
       try{
         const j=await r.json();
@@ -238,7 +241,7 @@ async function ask(parts){
           if(rd){const s=parseInt(rd,10);if(s>0)wait=Math.min(90,s+3)}
         }
       }catch(e){}
-      for(let s=wait;s>0;s--){setNote(`무료 한도 대기 ${s}초`);await sleep(1000)}
+      for(let s=wait;s>0;s--){if(S.cancel)throw Error('CANCEL');setNote(`무료 한도 대기 ${s}초 · 그만두기 가능`);await sleep(1000)}
       continue;
     }
     const d=await r.json().catch(()=>({error:{message:'응답을 읽지 못했습니다 ('+r.status+')'}}));
@@ -335,7 +338,7 @@ ${avoid.length?'- 이미 출제된 단어는 피할 것: '+avoid.slice(0,40).joi
 
 /* ═══ 생성 ═══ */
 async function build(o){
-  const need=S.want, per=14, batches=Math.ceil(need/per);
+  const need=20, per=20, batches=1;
   S.prog={label:'문제를 만드는 중',done:0,total:batches};render();
   const avoid=o.base?o.base.questions.map(q=>plain(q.jp||(q.pairs?q.pairs[0].k:''))).filter(Boolean):[];
   const tasks=[];
@@ -369,7 +372,7 @@ async function build(o){
 }
 
 async function fromPhotos(){
-  S.err='';if(!S.shots.length)return;
+  S.err='';S.cancel=false;if(!S.shots.length)return;
   S.prog={label:'사진에서 단어를 뽑는 중',done:0,total:S.shots.length};render();
   try{
     let raw='';
@@ -391,11 +394,11 @@ async function fromPhotos(){
     const n=S.shots.length, thumb=S.shots[0].thumb;
     S.shots=[];
     await build({items,thumb,title:`${today()} 노트 ${n}장`});
-  }catch(e){S.prog=null;S.err=e.message;render()}
+  }catch(e){S.prog=null;S.err=e.message==='CANCEL'?'':e.message;render()}
 }
 
 async function fromHistory(){
-  S.err='';if(!S.picked.length)return;
+  S.err='';S.cancel=false;if(!S.picked.length)return;
   const idx=getJ(IDX,[]);
   S.sheet=null;S.prog={label:'공부 기록을 모으는 중',done:0,total:S.picked.length};render();
   try{
@@ -409,13 +412,13 @@ async function fromHistory(){
     if(!items.length)throw Error('단어가 없습니다');
     const n=S.picked.length;S.picked=[];
     await build({items,thumb,title:`모아 보기 · ${n}회분`});
-  }catch(e){S.prog=null;S.err=e.message;render()}
+  }catch(e){S.prog=null;S.err=e.message==='CANCEL'?'':e.message;render()}
 }
 
 async function regen(set){
-  S.sheet=null;S.err='';
+  S.sheet=null;S.err='';S.cancel=false;
   try{await build({items:set.items,base:set})}
-  catch(e){S.prog=null;S.err=e.message;render()}
+  catch(e){S.prog=null;S.err=e.message==='CANCEL'?'':e.message;render()}
 }
 
 /* ═══ 진행 ═══ */
@@ -497,7 +500,8 @@ function render(){
   const app=document.getElementById('app');
   if(!LS.get(KEY))return app.innerHTML=viewKey();
   if(S.prog)return app.innerHTML=head()+`<div class="load"><div class="brush"></div>
-    <p>${esc(S.prog.label)}</p><div class="n" id="pn">${S.prog.done} / ${S.prog.total}</div></div>`;
+    <p>${esc(S.prog.label)}</p><div class="n" id="pn">${S.prog.done} / ${S.prog.total}</div>
+    <button class="b-ghost" style="margin-top:26px" data-a="stop">그만두기</button></div>`;
   if(S.view==='quiz')app.innerHTML=viewQuiz();
   else if(S.view==='result')app.innerHTML=viewResult();
   else app.innerHTML=viewHome();
@@ -542,17 +546,11 @@ function viewHome(){
     <p class="genko-desc">교재 페이지를 여러 장 찍어 올리면 그 내용으로 시험을 만듭니다.</p>
     ${S.shots.length?`<div class="shots">${S.shots.map((s,i)=>
       `<div class="shot"><img src="${s.thumb}"><button data-a="unshot" data-i="${i}">×</button></div>`).join('')}</div>`:''}
-    <div class="count">
-      <button class="step" data-a="minus">−</button>
-      <div class="count-n mincho">${S.want}<span>문제</span></div>
-      <button class="step" data-a="plus">＋</button>
-    </div>
-    <input class="rng" type="range" min="10" max="100" step="10" value="${S.want}" data-a="rng">
     <div class="btnrow">
       <button class="b-line" data-a="cam">사진 찍기</button>
       <button class="b-line" data-a="pick">앨범에서 고르기</button>
     </div>
-    ${S.shots.length?`<button class="b-red b-wide" data-a="make">사진 ${S.shots.length}장으로 ${S.want}문제 만들기</button>`:''}
+    ${S.shots.length?`<button class="b-red b-wide" data-a="make">사진 ${S.shots.length}장으로 20문제 만들기</button>`:''}
   </div>
   ${S.err?`<div class="err">${esc(S.err)}</div>`:''}
   <div class="sec">공부 이력</div>
@@ -592,11 +590,7 @@ function viewSheet(){
       ${idx.map(r=>`<button class="rec" data-a="tick" data-id="${r.id}">
         <div class="box mincho">${S.picked.includes(r.id)?'○':''}</div>
         <div class="rec-t"><b>${esc(r.title)}</b><span>${r.date} · 단어 ${r.words||'?'}</span></div></button>`).join('')}
-      <div class="count" style="margin-top:18px">
-        <button class="step" data-a="minus">−</button>
-        <div class="count-n mincho">${S.want}<span>문제</span></div>
-        <button class="step" data-a="plus">＋</button></div>
-      <button class="b-red b-wide" data-a="mixgo" ${S.picked.length?'':'disabled'}>${S.picked.length}개 기록으로 시험 만들기</button>
+      <button class="b-red b-wide" style="margin-top:18px" data-a="mixgo" ${S.picked.length?'':'disabled'}>${S.picked.length}개 기록으로 20문제 만들기</button>
       <button class="b-ghost b-wide" data-a="close">닫기</button></div></div>`;
   }
   const at=s.attempts||[];
@@ -609,7 +603,7 @@ function viewSheet(){
     ${at.length?at.map(a=>`<div class="log"><span>${a.date}</span><span class="mincho">${a.score} / ${a.total}</span></div>`).join('')
       :'<p class="empty">아직 풀지 않았습니다.</p>'}
     <button class="b-red b-wide" data-a="play">이 시험 다시 풀기</button>
-    <button class="b-line b-wide" data-a="regen">같은 단어로 새 문제 ${S.want}개 만들기</button>
+    <button class="b-line b-wide" data-a="regen">같은 단어로 새 문제 20개 만들기</button>
     <button class="b-ghost b-wide" data-a="del">이 기록 지우기</button>
     <button class="b-ghost b-wide" data-a="close">닫기</button></div></div>`;
 }
@@ -716,6 +710,7 @@ document.addEventListener('click',async e=>{
     case 'savekey2':{LS.set(KEY,document.getElementById('k2').value.trim());
       LS.set(MODEL,document.getElementById('m2').value.trim()||'gemini-3.6-flash');LS.del(AUTHK);LS.del(MODEK);
       S.sheet=null;render();break}
+    case 'stop':S.cancel=true;S.prog=null;S.err='';S.view='home';render();break;
     case 'settings':S.sheet={kind:'settings'};S.test='';render();break;
     case 'test':{
       LS.set(KEY,document.getElementById('k2').value.trim());
