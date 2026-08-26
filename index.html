@@ -201,16 +201,17 @@ function shrink(file,max,q){return new Promise((res,rej)=>{
 
 /* ═══ Gemini 호출 ═══ */
 function setNote(t){const e=document.getElementById('pn');if(e)e.textContent=t}
+const AUTHK='jq:auth', MODEK='jq:mode';
 async function ask(parts){
   const key=(LS.get(KEY)||'').trim(), model=LS.get(MODEL)||'gemini-3.6-flash';
   const base=`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   // auth 0: x-goog-api-key 헤더 / 1: ?key= 쿼리
   // mode 0: 생각끄기+JSON / 1: JSON만 / 2: 옵션 없음
-  let auth=0, mode=0, lastErr='';
+  let auth=+(LS.get(AUTHK)||0), mode=+(LS.get(MODEK)||0), lastErr='';
   for(let t=0;t<8;t++){
     const gc={temperature:.8,maxOutputTokens:8192};
     if(mode<2)gc.responseMimeType='application/json';
-    if(mode<1)gc.thinkingConfig={thinkingBudget:0};
+    if(mode<1)gc.thinkingConfig={thinkingLevel:'low'};
     const url=base+(auth===1?'?key='+encodeURIComponent(key):'');
     const headers={'Content-Type':'application/json'};
     if(auth===0)headers['x-goog-api-key']=key;
@@ -259,7 +260,7 @@ async function ask(parts){
     const c=d.candidates&&d.candidates[0];
     if(!c)throw Error('후보 없음 '+JSON.stringify(d).slice(0,180));
     const txt=((c.content&&c.content.parts)||[]).map(p=>p.text||'').join('');
-    if(txt)return txt;
+    if(txt){LS.set(AUTHK,String(auth));LS.set(MODEK,String(mode));return txt}
     if(mode<2){mode++;continue}
     throw Error('빈 응답 (finishReason: '+(c.finishReason||'?')+')');
   }
@@ -334,7 +335,7 @@ ${avoid.length?'- 이미 출제된 단어는 피할 것: '+avoid.slice(0,40).joi
 
 /* ═══ 생성 ═══ */
 async function build(o){
-  const need=S.want, per=10, batches=Math.ceil(need/per);
+  const need=S.want, per=14, batches=Math.ceil(need/per);
   S.prog={label:'문제를 만드는 중',done:0,total:batches};render();
   const avoid=o.base?o.base.questions.map(q=>plain(q.jp||(q.pairs?q.pairs[0].k:''))).filter(Boolean):[];
   const tasks=[];
@@ -713,12 +714,12 @@ document.addEventListener('click',async e=>{
     case 'savekey':{const v=document.getElementById('k').value.trim();
       if(!v)return;LS.set(KEY,v);S.err='';render();break}
     case 'savekey2':{LS.set(KEY,document.getElementById('k2').value.trim());
-      LS.set(MODEL,document.getElementById('m2').value.trim()||'gemini-3.6-flash');
+      LS.set(MODEL,document.getElementById('m2').value.trim()||'gemini-3.6-flash');LS.del(AUTHK);LS.del(MODEK);
       S.sheet=null;render();break}
     case 'settings':S.sheet={kind:'settings'};S.test='';render();break;
     case 'test':{
       LS.set(KEY,document.getElementById('k2').value.trim());
-      LS.set(MODEL,document.getElementById('m2').value.trim()||'gemini-3.6-flash');
+      LS.set(MODEL,document.getElementById('m2').value.trim()||'gemini-3.6-flash');LS.del(AUTHK);LS.del(MODEK);
       S.test='테스트 중...';render();
       try{const t=await ask([{text:'JSON 배열로만 답하세요: ["ok"]'}]);S.test='성공 ✓ '+t.slice(0,120)}
       catch(err){S.test='실패 ✕ '+err.message}
