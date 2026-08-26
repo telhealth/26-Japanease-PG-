@@ -96,6 +96,8 @@ input.text:focus{outline:none;border-color:var(--ink)}
 .qno{font-size:12px;letter-spacing:.28em;color:var(--red);margin-bottom:9px;display:flex;justify-content:space-between}
 .qno i{font-style:normal;color:#8d8674;letter-spacing:.1em}
 .qtext{font-size:17px;line-height:1.65;word-break:keep-all}
+.jp u{text-decoration:underline;text-decoration-color:var(--red);
+  text-decoration-thickness:2px;text-underline-offset:7px}
 .jp{font-size:30px;line-height:1.9;margin:16px 0 22px;border-left:3px solid var(--red);padding-left:14px}
 .choice{position:relative;display:flex;align-items:flex-start;gap:12px;width:100%;background:#FBF9F2;
   border:1px solid var(--faint);padding:15px 15px;text-align:left;margin-bottom:9px;font-size:19px;line-height:1.75}
@@ -143,6 +145,8 @@ input.short:focus{outline:none;border-color:var(--red)}
 .rv-a{font-size:12.5px;color:#5f5949;line-height:1.6}
 .rv-a i{font-style:normal;color:var(--red);font-weight:600}
 
+.tip{background:#F1F4EE;border-left:3px solid var(--grid);padding:14px 15px;
+  font-size:13px;line-height:1.75;color:#4d5a4f;margin-top:18px}
 .err{background:#FBF0EE;border-left:3px solid var(--red);padding:13px 15px;font-size:13.5px;
   line-height:1.7;margin-top:16px;word-break:break-word;white-space:pre-wrap}
 .note{font-size:11.5px;color:#8d8674;line-height:1.7;margin-top:20px;text-align:center}
@@ -174,10 +178,12 @@ let S={view:'home',shots:[],want:20,cancel:false,err:'',prog:null,set:null,qi:0,
 /* ═══ 유틸 ═══ */
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const RUBY=/([\u4e00-\u9fff々ヶ]+)[（(]([ぁ-んァ-ヶー]+)[)）]/g;
-const plain=t=>String(t||'').replace(RUBY,'$1');
+const plain=t=>String(t||'').replace(RUBY,'$1').replace(/<\/?u>/g,'');
 function ruby(t,strip){
   if(!t)return'';
-  return esc(String(t)).replace(RUBY,(m,k,r)=>strip?k:`<ruby>${k}<rt>${r}</rt></ruby>`);
+  return esc(String(t))
+    .replace(/&lt;u&gt;/g,'<u>').replace(/&lt;\/u&gt;/g,'</u>')
+    .replace(RUBY,(m,k,r)=>strip?k:`<ruby>${k}<rt>${r}</rt></ruby>`);
 }
 const norm=s=>String(s||'').trim().toLowerCase().replace(/[\s・、。,.]/g,'')
   .replace(/[\u30a1-\u30f6]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
@@ -309,6 +315,7 @@ const QRULES=`형식(4종을 골고루 섞을 것):
 - 단, "short" 문제의 jp에는 후리가나를 붙이지 않는다(정답 노출 금지).
 - jp에는 정답을 절대 넣지 않는다. 정답이 보기(choices) 안에 있는 문제는 jp를 "" 로 비워 둔다.
 - 빈칸 문제는 정답 자리를 반드시 ＿＿ 로 가린다.
+- 읽는 법을 묻는 단어는 <u>단어</u> 처럼 u 태그로 감싼다. 다른 HTML 태그는 쓰지 않는다.
 - match는 pairs 정확히 4쌍. pairs의 k에는 후리가나를 붙이지 않는다.
 - write의 answers에는 한자·히라가나 표기를 모두 넣는다.
 - words: 문제에 나온 단어 2~4개. w는 후리가나 없는 표기, k는 한국어 뜻.
@@ -569,6 +576,12 @@ function viewHome(){
     ${S.shots.length?`<button class="b-red b-wide" data-a="make">사진 ${S.shots.length}장으로 20문제 만들기</button>`:''}
   </div>
   ${S.err?`<div class="err">${esc(S.err)}</div>`:''}
+  ${LS.get(MODEL)?'':`<div class="tip">
+    <b>처음 오셨나요?</b><br>
+    설정에서 <b>쓸 수 있는 모델 보기</b>를 눌러 <b>lite</b>가 붙은 모델을 고르세요.<br>
+    무료 한도에 여유가 생겨서 막히지 않고 쓸 수 있습니다.
+    <button class="b-sm" style="margin-top:10px" data-a="settings">설정 열기</button>
+  </div>`}
   <div class="sec">공부 이력</div>
   ${idx.length?idx.map(r=>`<button class="rec" data-a="open" data-id="${r.id}">
       ${r.thumb?`<img src="${r.thumb}">`:'<div class="box mincho">集</div>'}
