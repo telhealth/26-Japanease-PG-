@@ -307,6 +307,8 @@ const QRULES=`형식(4종을 골고루 섞을 것):
 공통 규칙:
 - 모든 한자에 (읽는법) 후리가나를 괄호로 붙인다. 예: 毎日(まいにち)勉強(べんきょう)します
 - 단, "short" 문제의 jp에는 후리가나를 붙이지 않는다(정답 노출 금지).
+- jp에는 정답을 절대 넣지 않는다. 정답이 보기(choices) 안에 있는 문제는 jp를 "" 로 비워 둔다.
+- 빈칸 문제는 정답 자리를 반드시 ＿＿ 로 가린다.
 - match는 pairs 정확히 4쌍. pairs의 k에는 후리가나를 붙이지 않는다.
 - write의 answers에는 한자·히라가나 표기를 모두 넣는다.
 - words: 문제에 나온 단어 2~4개. w는 후리가나 없는 표기, k는 한국어 뜻.
@@ -478,6 +480,18 @@ function wordList(q){
   });
   return out;
 }
+function safeJp(q){
+  const jp=plain(q.jp||'');
+  if(!jp)return '';
+  const ans=q.type==='choice'
+    ? [plain((q.choices||[])[q.answer]||'')]
+    : (q.answers||[]).map(plain);
+  for(const a of ans){
+    const t=String(a||'').trim();
+    if(t.length>1&&(jp===t||jp.indexOf(t)>=0))return '';   // 정답이 보이면 숨김
+  }
+  return q.jp;
+}
 function glossHTML(q){
   const w=wordList(q);
   if(!w.length)return'';
@@ -627,7 +641,8 @@ function viewQuiz(){
       `<button class="tile mincho ${P.done[i]?'done':''} ${P.bad===i?'bad':''}" style="font-size:20px" data-a="r" data-i="${i}">${esc(q.pairs[i].r)}${P.done[i]?MARU:''}</button>`).join('')}</div></div>
       ${S.locked?'':'<p class="hint">왼쪽 한자 → 오른쪽 읽는 법 순서로 누르세요</p>'}`;
   }else{
-    const jp=q.jp?`<div class="jp mincho">${ruby(q.jp,q.type==='short')}</div>`:'<div style="height:16px"></div>';
+    const jpv=safeJp(q);
+    const jp=jpv?`<div class="jp mincho">${ruby(jpv,q.type==='short')}</div>`:'<div style="height:16px"></div>';
     if(q.type==='choice'){
       body=jp+q.choices.map((c,i)=>`<button class="choice ${S.locked&&(i===q.answer||i===last.given)?'on':''}"
         data-a="c" data-i="${i}" ${S.locked?'disabled':''}>
@@ -727,11 +742,16 @@ document.addEventListener('click',async e=>{
           {headers:{'x-goog-api-key':(LS.get(KEY)||'').trim()}});
         const d=await r.json();
         if(d.error)throw Error(d.error.message);
-        S.models=(d.models||[])
+        const all=(d.models||[])
           .filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent'))
           .map(m=>String(m.name||'').replace('models/',''))
-          .filter(n=>/flash|lite/i.test(n));
-        S.test=S.models.length?'아래에서 고르세요. lite가 무료 한도에 여유가 있습니다.':'목록이 비어 있습니다.';
+          .filter(n=>/flash/i.test(n))
+          .filter(n=>!/preview|exp|thinking|image|tts|audio|native|live|embedding|learnlm/i.test(n));
+        const seenM=new Set(), pick=[];
+        all.sort((a,b)=>(b.includes('lite')-a.includes('lite'))||b.localeCompare(a));
+        for(const n of all){if(seenM.has(n))continue;seenM.add(n);pick.push(n)}
+        S.models=pick.slice(0,6);
+        S.test=S.models.length?'lite가 붙은 것이 무료 한도에 가장 여유 있습니다.':'목록이 비어 있습니다.';
       }catch(err){S.test='실패 ✕ '+err.message}
       render();break}
     case 'usemodel':{
